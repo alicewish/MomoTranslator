@@ -1,0 +1,10 @@
+easyocr
+loguru
+matplotlib
+natsort
+numpy
+pytesseract
+qtawesome
+scipy
+webcolors
+xmltodict

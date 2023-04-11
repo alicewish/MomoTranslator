@@ -5,6 +5,7 @@ import os.path
 import re
 import sys
 import webbrowser
+from ast import Import, ImportFrom, parse, walk
 from base64 import b64encode
 from copy import deepcopy
 from csv import reader, writer
@@ -21,27 +22,28 @@ from pprint import pprint
 from re import I, findall
 from re import compile as recompile
 from shutil import copy2
+from stdlib_list import stdlib_list
 from subprocess import Popen, call
 from time import strftime, time
 from traceback import print_exc
 from uuid import getnode
 
 import numpy as np
+import pkg_resources
 import xmltodict
 import yaml
 from PIL import Image, ImageDraw, ImageFont
-from PyQt6.QtCore import QSettings, QSize, Qt, QTranslator
-from PyQt6.QtGui import QAction, QBrush, QDoubleValidator, QFont, QImage, QKeySequence, QPainter, QPixmap, \
-    QTransform, QIcon, QActionGroup, QGuiApplication
-from PyQt6.QtWidgets import QApplication, QDockWidget, QFileDialog, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, \
-    QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QButtonGroup, QRadioButton, \
-    QListWidgetItem, QMainWindow, QMenu, QMessageBox, QToolBar, QProgressBar, QComboBox, \
-    QVBoxLayout, QWidget, QToolButton, QListView, QTabWidget, QAbstractItemView, QStatusBar, QDialog
+from PyQt6.QtCore import QSettings, QSize, QTranslator, Qt
+from PyQt6.QtGui import QAction, QActionGroup, QBrush, QDoubleValidator, QFont, QGuiApplication, QIcon, QImage, \
+    QKeySequence, QPainter, QPixmap, QTransform
+from PyQt6.QtWidgets import QAbstractItemView, QApplication, QButtonGroup, QComboBox, QDialog, QDockWidget, QFileDialog, \
+    QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, \
+    QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QRadioButton, QStatusBar, QTabWidget, \
+    QToolBar, QToolButton, QVBoxLayout, QWidget
 from aip import AipOcr
-from cv2 import BORDER_CONSTANT, INTER_LINEAR, copyMakeBorder, mean, resize, CHAIN_APPROX_SIMPLE, RETR_TREE, \
-    findContours, COLOR_BGR2BGRA, cvtColor, imencode, inRange, COLOR_BGR2RGB, COLOR_RGB2BGR, add, arcLength, \
-    boundingRect, contourArea, moments, drawContours, bitwise_and, erode, subtract, dnn, dilate, RETR_EXTERNAL, \
-    imdecode
+from cv2 import BORDER_CONSTANT, CHAIN_APPROX_SIMPLE, COLOR_BGR2BGRA, COLOR_BGR2RGB, COLOR_RGB2BGR, INTER_LINEAR, \
+    RETR_EXTERNAL, RETR_TREE, add, arcLength, bitwise_and, boundingRect, contourArea, copyMakeBorder, cvtColor, dilate, \
+    dnn, drawContours, erode, findContours, imdecode, imencode, inRange, mean, moments, resize, subtract
 from deep_translator import GoogleTranslator
 from docx import Document
 from docx.shared import Inches
@@ -49,14 +51,14 @@ from easyocr import Reader
 from loguru import logger
 from matplotlib import colormaps
 from natsort import natsorted
-from numpy import array, int32, maximum, minimum, ones, diff, where, nonzero, transpose, uint8, argmax, ndarray, mean, \
-    clip, zeros, ascontiguousarray, float32, mod, unique, zeros_like, arange, fromfile
+from numpy import arange, argmax, array, ascontiguousarray, clip, diff, float32, fromfile, int32, maximum, mean, \
+    minimum, mod, ndarray, nonzero, ones, transpose, uint8, unique, where, zeros, zeros_like
 from numpy import split as n_split
 from pytesseract import image_to_string
 from qtawesome import icon
 from scipy import ndimage as ndi
 from skimage.segmentation import watershed
-from webcolors import rgb_to_name, CSS3_HEX_TO_NAMES, hex_to_rgb, name_to_rgb
+from webcolors import CSS3_HEX_TO_NAMES, hex_to_rgb, name_to_rgb, rgb_to_name
 
 use_torch = True
 use_torch = False
@@ -155,6 +157,8 @@ type_dic = {
     'js': '.js',
     'markdown': ('.md', '.markdown'),
 }
+
+python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
 APP_NAME = 'MomoTranslator'
 MAJOR_VERSION = 1
@@ -3088,7 +3092,7 @@ def main_qt():
     sys.exit(appgui.exec())
 
 
-def trans_self():
+def self_translate_qt():
     src_head = ['Source', '目标语言']
 
     for i in range(len(language_tuples)):
@@ -3255,7 +3259,7 @@ def step1_analyze_bubbles():
             letter_mask = color_letter_big.get_img(image_raw)
 
             filtered_cnts = get_raw_bubbles(bubble_mask, letter_mask, comictextdetector_mask)
-            colorful_raw_bubbles = get_colorful_bubbles(image_raw, filtered_cnts)
+            # colorful_raw_bubbles = get_colorful_bubbles(image_raw, filtered_cnts)
 
             # ================切割相连气泡================
             single_cnts = seg_bubbles(filtered_cnts, bubble_mask, letter_mask, media_type)
@@ -3503,14 +3507,17 @@ def step2_OCR():
     OCR_doc.save(OCR_docx_path)
 
 
-def capitalize_sentence(sentence):
-    # 处理缩写
+def capitalize_sentence(sentence: str) -> str:
+    """
+    首字母大写处理句子，同时考虑缩写。
+
+    :param sentence: 需要处理的句子。
+    :return: 首字母大写处理后的句子。
+    """
     abbreviations = ['Dr.', 'Ms.', 'Mr.', 'Mrs.']
     for abbr in abbreviations:
         sentence = sentence.replace(abbr, abbr.lower())
-    # 首字母大写
     capitalized_sentence = sentence[0].upper() + sentence[1:].lower()
-    # 恢复缩写
     for abbr in abbreviations:
         capitalized_sentence = capitalized_sentence.replace(abbr.lower(), abbr)
     return capitalized_sentence
@@ -3600,6 +3607,46 @@ def step4_lettering():
     pass
 
 
+@timer_decorator
+def generate_requirements(py_path, python_version):
+    """
+    生成给定Python文件中使用的非标准库的列表。
+
+    :param py_path: 要分析的Python文件的路径。
+    :type py_path: str
+    :param python_version: Python版本的元组，默认为当前Python版本。
+    :type python_version: tuple
+    :return: 无
+    """
+    # 获取已安装的包及其版本
+    installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+    # 获取标准库模块列表
+    stdlib_modules = set(stdlib_list(python_version))
+
+    # 读取Python文件并解析语法树
+    py_text = read_txt(py_path)
+    root = parse(py_text)
+
+    imports = []
+    # 遍历语法树，提取import语句
+    for node in walk(root):
+        if isinstance(node, Import):
+            imports.extend([alias.name for alias in node.names])
+        elif isinstance(node, ImportFrom):
+            if node.level == 0:
+                imports.append(node.module)
+    imported_modules = set(imports)
+    requirements = []
+
+    # 对于导入的每个模块，检查是否为非标准库模块
+    for module in imported_modules:
+        if module in installed_packages and module not in stdlib_modules:
+            requirements.append(module)
+    requirements.sort()
+    requirements_text = lf.join(requirements)
+    print(requirements_text)
+
+
 def z():
     pass
 
@@ -3659,19 +3706,23 @@ if __name__ == "__main__":
 
     do_qt = False
     do_dev = False
+    do_requirements = False
 
 
     def steps():
         pass
 
 
-    do_mode = 'do_qt'
-    # do_mode = 'do_dev'
+    do_mode = 'do_qt'  # 显示GUI
+    do_mode = 'do_dev'  # 开发调试
+    do_mode = 'do_requirements'  # 生成requirements
 
     if do_mode == 'do_qt':
         do_qt = True
     elif do_mode == 'do_dev':
         do_dev = True
+    elif do_mode == 'do_requirements':
+        do_requirements = True
 
     if do_qt:
         if model_path.exists():
@@ -3688,7 +3739,7 @@ if __name__ == "__main__":
         # 给代码内容添加self.tr()
         # wrap_strings_with_tr()
         # 生成语言文件
-        # trans_self()
+        # self_translate_qt()
 
         image_folder = ComicProcess / 'Black Canary 001'
         frame_yml_path = image_folder.parent / f'{image_folder.name}.yml'
@@ -3707,4 +3758,6 @@ if __name__ == "__main__":
         # step0_analyze_frames()
         # step1_analyze_bubbles()
         # step2_OCR()
-        # step3_translate()
+        step3_translate()
+    elif do_requirements:
+        generate_requirements(py_path, python_version)
