@@ -1,6 +1,10 @@
 # MomoTranslator
 Pure OpenCV comic translation tool
 
+![Commit activity](https://img.shields.io/github/commit-activity/m/alicewish/MomoTranslator)
+![License](https://img.shields.io/github/license/alicewish/MomoTranslator)
+![Contributors](https://img.shields.io/github/contributors/alicewish/MomoTranslator)
+
 
 用GPT4重构了我的漫画翻译辅助软件MomoTranslator
 
