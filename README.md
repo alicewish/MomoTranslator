@@ -41,3 +41,45 @@ Pure OpenCV comic translation tool
 
 
 原版软件（默墨汉化）有完整的在Photoshop中涂白、嵌字并导出为PSD的功能，此功能正在重构中，此外的需求可在issue里提。
+
+# 安装
+
+首先，确保您的计算机上已安装Python 3.6或更高版本。您可以通过在命令行输入以下命令来检查Python版本：
+```bash
+python --version
+```
+
+克隆此存储库或下载ZIP文件并解压缩。
+
+使用以下命令安装必需的Python库：
+```bash
+pip install -r requirements.txt
+```
+
+# 使用
+
+在命令行中，进入到项目文件夹并运行pyqt5_momotranslator.py文件：
+
+```bash
+python pyqt5_momotranslator.py
+```
+
+运行程序后，将出现一个图形用户界面。点击选择文件按钮，浏览并选择您要翻译的OCR识别后的docx文档。
+
+选择目标语言，然后点击翻译按钮。程序将开始翻译文档中的文本。
+
+# 功能
+
+读取OCR识别后的docx文档。
+
+将文本的每个句子的首字母大写，并将多行文本替换为单行文本。
+
+对文本进行分块处理，确保每个块的字符数不超过最大字符数限制。
+
+使用GoogleTranslator将文本翻译成目标语言。
+
+显示翻译后的文本并提供复制功能。
+
+# 许可证
+
+MIT License
