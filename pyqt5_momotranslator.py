@@ -3714,8 +3714,8 @@ if __name__ == "__main__":
 
 
     do_mode = 'do_qt'  # 显示GUI
-    do_mode = 'do_dev'  # 开发调试
-    do_mode = 'do_requirements'  # 生成requirements
+    # do_mode = 'do_dev'  # 开发调试
+    # do_mode = 'do_requirements'  # 生成requirements
 
     if do_mode == 'do_qt':
         do_qt = True
