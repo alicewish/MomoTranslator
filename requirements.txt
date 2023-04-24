@@ -1,10 +1,17 @@
+baidu_aip
+bs4
 easyocr
+jieba
 loguru
+mammoth
 matplotlib
 natsort
 numpy
+pyqt6
 pytesseract
 qtawesome
 scipy
+stdlib_list
+torch
 webcolors
 xmltodict
