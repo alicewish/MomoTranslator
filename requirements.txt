@@ -1,5 +1,6 @@
 baidu_aip
 bs4
+deep-translator
 easyocr
 jieba
 loguru
@@ -9,6 +10,7 @@ natsort
 numpy
 pyqt6
 pytesseract
+python-docx
 qtawesome
 scipy
 stdlib_list
