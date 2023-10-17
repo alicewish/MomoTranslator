@@ -3824,13 +3824,13 @@ class OrderWindow(QMainWindow):
         self.reset_zoom_action = iact(self.tr('Reset Zoom'), 'mdi6.backup-restore', "Ctrl+0",
                                       trig=lambda: self.cgv.fit2view("original"))
         self.prev_img_action = iact(self.tr('Previous Image'), 'ei.arrow-left', "Ctrl+Left",
-                                      trig=lambda: self.nav_img(-1))
+                                    trig=lambda: self.nav_img(-1))
         self.next_img_action = iact(self.tr('Next Image'), 'ei.arrow-right', "Ctrl+Right",
-                                      trig=lambda: self.nav_img(1))
+                                    trig=lambda: self.nav_img(1))
         self.first_img_action = iact(self.tr('First Image'), 'ei.step-backward', "Ctrl+Home",
-                                       trig=lambda: self.nav_img("first"))
+                                     trig=lambda: self.nav_img("first"))
         self.last_img_action = iact(self.tr('Last Image'), 'ei.step-forward', "Ctrl+End",
-                                      trig=lambda: self.nav_img("last"))
+                                    trig=lambda: self.nav_img("last"))
         self.swap_order_action = iact(self.tr('Swap Ordering'), 'mdi.swap-horizontal', checkable=True,
                                       trig=lambda: self.set_order_mode('swap'))
         self.manual_order_action = iact(self.tr('Manual Ordering'), 'fa.hand-grab-o', checkable=True,
@@ -4359,7 +4359,7 @@ class MistWindow(QMainWindow):
         self.open_folder_action = iact(self.tr('Open Folder'), 'ei.folder', QKeySequence.StandardKey.Open,
                                        trig=self.open_folder_by_dialog)
         self.save_img_action = iact(self.tr('Save Image'), 'ri.image-edit-fill', QKeySequence.StandardKey.Save,
-                                      trig=self.save_img)
+                                    trig=self.save_img)
         self.zoom_in_action = iact(self.tr('Zoom In'), 'ei.zoom-in', QKeySequence.StandardKey.ZoomIn,
                                    trig=self.cgv.cust_zoom_in)
         self.zoom_out_action = iact(self.tr('Zoom Out'), 'ei.zoom-out', QKeySequence.StandardKey.ZoomOut,
@@ -4373,13 +4373,13 @@ class MistWindow(QMainWindow):
         self.reset_zoom_action = iact(self.tr('Reset Zoom'), 'mdi6.backup-restore', "Ctrl+0",
                                       trig=lambda: self.cgv.fit2view("original"))
         self.prev_img_action = iact(self.tr('Previous Image'), 'ei.arrow-left', "Ctrl+Left",
-                                      trig=lambda: self.nav_img(-1))
+                                    trig=lambda: self.nav_img(-1))
         self.next_img_action = iact(self.tr('Next Image'), 'ei.arrow-right', "Ctrl+Right",
-                                      trig=lambda: self.nav_img(1))
+                                    trig=lambda: self.nav_img(1))
         self.first_img_action = iact(self.tr('First Image'), 'ei.step-backward', "Ctrl+Home",
-                                       trig=lambda: self.nav_img("first"))
+                                     trig=lambda: self.nav_img("first"))
         self.last_img_action = iact(self.tr('Last Image'), 'ei.step-forward', "Ctrl+End",
-                                      trig=lambda: self.nav_img("last"))
+                                    trig=lambda: self.nav_img("last"))
         self.about_action = iact(f"{self.tr('About')} {APP_NAME}", None,
                                  trig=self.show_about_dialog)
         self.about_qt_action = iact(f"{self.tr('About')} Qt", None,
@@ -5841,6 +5841,7 @@ def seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type):
     return single_cnts, all_textblocks
 
 
+@logger.catch
 def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_type, auto_subdir):
     """
     分析气泡并根据指定的颜色模式对其进行处理。
@@ -5987,12 +5988,10 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
         write_pic(cp_textblock_jpg, textblock_bubbles)
         write_pic(cp_preview_jpg, colorful_single_bubbles)
         write_pic(cp_mask_cnt_png, transparent_img)
-    else:
-        transparent_img = None
     return cp_mask_cnt_png
 
 
-# @logger.catch
+@logger.catch
 def analyze1pic(img_file, frame_data, color_patterns, media_type, auto_subdir):
     logger.warning(f'{img_file=}')
     image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
