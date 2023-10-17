@@ -5,6 +5,8 @@ Pure OpenCV comic translation tool
 ![License](https://img.shields.io/github/license/alicewish/MomoTranslator)
 ![Contributors](https://img.shields.io/github/contributors/alicewish/MomoTranslator)
 
+简体中文 | [English](README_EN.md)
+
 ## 功能
 
 漫画翻译辅助软件MomoTranslator当前的功能为：
