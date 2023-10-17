@@ -7,6 +7,7 @@ do_mode: 'do_qt'
 #do_mode: 'do_dev_folder'
 #do_mode: 'do_dev_pic'
 folder_name: 'A Righteous Thirst for Vengeance 002'
+area_folder_name: 'Phantom Road 001'
 #browser: 'Safari'
 browser: 'Google Chrome'
 thumb_size: 240
