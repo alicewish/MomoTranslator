@@ -5,10 +5,9 @@ Pure OpenCV comic translation tool
 ![License](https://img.shields.io/github/license/alicewish/MomoTranslator)
 ![Contributors](https://img.shields.io/github/contributors/alicewish/MomoTranslator)
 
+## 功能
 
-用GPT4重构了我的漫画翻译辅助软件MomoTranslator
-
-重构版当前的功能为：
+漫画翻译辅助软件MomoTranslator当前的功能为：
 
 1. 查找漫画画格
 
@@ -18,9 +17,11 @@ Pure OpenCV comic translation tool
 
 4. 识别文字
 
-5. ChatGPT网页版翻译，无需api
+5. 使用谷歌和ChatGPT网页版翻译
 
 填字功能暂不公开，如果是汉化者要用可以找我跑填字脚本。
+
+## 演示视频
 
 之前的功能演示视频见https://www.bilibili.com/video/BV1P54y1Q7fW/
 
@@ -30,7 +31,7 @@ Pure OpenCV comic translation tool
 
 由于现在ChatGPT的发展，我觉得也许有其他方法避免最糟糕的结果，可以先试试开源。
 
-# 安装
+## 安装
 
 首先，确保您的计算机上已安装Python 3.9或更高版本。您可以通过在命令行输入以下命令来检查Python版本：
 ```bash
@@ -44,7 +45,7 @@ python --version
 pip install -r requirements.txt
 ```
 
-# 使用
+## 使用
 
 在命令行中，进入到项目文件夹并运行pyqt5_momotranslator.py文件：
 
@@ -54,6 +55,6 @@ python pyqt5_momotranslator.py
 
 运行程序后，将出现一个图形用户界面。
 
-# 许可证
+## 许可证
 
-MIT License
+本项目根据MIT许可证授权。有关更多信息，请查看[LICENSE](https://github.com/alicewish/MomoTranslator/blob/main/LICENSE)文件。
