@@ -2587,8 +2587,8 @@ class AppConfig:
         # 使用 ruamel.yaml 来读取配置文件，因为它可以保留文件中的注释和顺序
         yaml = YAML()
         yaml.indent(mapping=2, sequence=4, offset=2)
-        with config_file.open('r') as f:
-            config_data = yaml.load(f)
+        with open(cls.user_config_yml, mode='r', encoding='utf-8') as yf:
+            config_data = yaml.load(yf)
 
         if cls.master_config_yml.exists():
             with open(cls.master_config_yml, mode='r', encoding='utf-8') as yf:
