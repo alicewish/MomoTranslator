@@ -55,7 +55,7 @@ Height,高度
 File Size,檔案大小
 Filnename,檔案名稱
 Start,開始
-Analyze Frames,分析漫畫畫格
+Analyze Frames,分析畫格
 Analyze Bubbles,分析氣泡
 OCR,OCR
 Translate,翻譯
@@ -71,3 +71,9 @@ Chinese Traditional,繁體中文
 Japanese,日語
 Korean,韓語
 Language,語言
+Swap Ordering,交換式排序
+Undo,撤銷
+Redo,重做
+Save,保存
+Manual Ordering,手動排序
+Order Bubbles,氣泡排序

@@ -55,7 +55,7 @@ Height,高度
 File Size,文件大小
 Filnename,文件名
 Start,开始
-Analyze Frames,分析漫画画格
+Analyze Frames,分析画格
 Analyze Bubbles,分析气泡
 OCR,文字识别
 Translate,翻译
@@ -74,3 +74,9 @@ Language,语言
 About Qt,
 About iManhua,
 iManhua Help,
+Swap Ordering,交换式排序
+Undo,撤销
+Redo,重做
+Save,保存
+Manual Ordering,手动排序
+Order Bubbles,气泡排序
