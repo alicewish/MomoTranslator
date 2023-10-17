@@ -8989,18 +8989,6 @@ if __name__ == "__main__":
 
     area_yml = area_img_folder.parent / f'{area_img_folder.name}-文字面积.yml'
 
-    cut_line_txt = UserDataFolder / '断行模式.txt'
-    cut_line_text = read_txt(cut_line_txt)
-    cut_line_list = cut_line_text.splitlines()
-    cut_models = []
-    for c in range(len(cut_line_list)):
-        cut_model_str = cut_line_list[c]
-        cut_model = cut_model_str.split('|')
-        model_cuts = cut_model[-1].split(',')
-        model_cuts = [int(x) for x in model_cuts]
-        cut_model = [int(cut_model[0]), int(cut_model[1]), tuple(model_cuts)]
-        cut_models.append(cut_model)
-
     auto_subdir = Auto / img_folder.name
     make_dir(auto_subdir)
     media_type = img_folder.parent.name.removesuffix('Process')
