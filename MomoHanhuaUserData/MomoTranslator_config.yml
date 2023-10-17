@@ -1,0 +1,192 @@
+#step_str: '012345678'
+step_str: '1'
+#thread_method: 'queue'
+thread_method: 'concurrent'
+pic_thread_method: 'concurrent'
+#do_mode: 'do_qt'
+#do_mode: 'do_dev_folder'
+#do_mode: 'do_dev_pic'
+folder_name: 'A Righteous Thirst for Vengeance 002'
+#browser: 'Safari'
+browser: 'Google Chrome'
+thumb_size: 240
+window_size: 1200,800
+WBLDN_padding: 120,60,60,40,50
+stem_level: 3
+media_lang: 'English'
+target_lang: 'zh-CN'
+#default_dpi: 300
+default_dpi: 150
+#default_dpi: 96
+lettering:
+  global_font_size: 30
+  global_font_name: '微软雅黑'
+  #global_font_name: '方正兰亭黑'
+#  global_rec_font_name: '方正粗宋'
+  global_rec_font_name:
+  global_spacing:
+  # global_spacing: 2
+font_dic:
+  微软雅黑: 'msyh.ttc'
+  方正兰亭黑: '方正兰亭黑_GBK.ttf'
+  方正粗宋: '方正粗宋_GBK.ttf'
+  水木明淙: '水木明淙.TTF'
+  方正诗甜宋: '方正诗甜宋 简 Medium.TTF'
+  方正雪炜锐黑: '方正雪炜锐黑 简.TTF'
+chatgpt:
+  # 是否允许控制浏览器
+  do_automate: true
+  # do_automate: false
+  sleep_minute: 2
+  gpt_line_max: 40
+  gpt_char_max: 1500
+long_pic:
+#  single_width_min: 1900
+  single_width_min: 2000
+  group_len: 4
+frame_settings:
+  frame_color:
+#  frame_color: '000000'
+#  frame_color: 'ffffff'
+  min_frame_length: 3
+  edge_size: 10
+  edge_ratio: 0.135
+  # 框架宽度
+  grid_width_min: 100
+  # 框架高度
+  grid_height_min: 100
+  # 考虑无背景无框架的画格
+  #max_white_ratio: 0.5
+  max_white_ratio: 0.9
+  # 是否根据漫画画格添加边线
+  do_add_frame: true
+#  do_add_frame: false
+  frame_thres: 0.9995
+  min_width: 60
+  gaps: [15, 6, 8, 8]
+#  gaps: 0
+  # 是否检查由多种颜色构成漫画画格框架
+  #check_second_color: true
+  check_second_color: false
+  # 是否使用多种颜色检测漫画画格
+  #check_more_frame_color: true
+  check_more_frame_color: false
+#  y_first: true
+  y_first: false
+  fully_framed: true
+#  fully_framed: false
+bubble_condition:
+  area_range: '100~1000000'
+  perimeter_range: '50~40000'
+  thickness_range: '4~4000'
+  br_w_range: '20~6000'
+  br_h_range: '20~6000'
+  br_wh_range: '20~6000'
+  br_wnh_range: '30~6000'
+  br_w_ratio_range: '0.005~0.95'
+  br_h_ratio_range: '0.005~0.95'
+  br_ratio_range: '0.1~1.1'
+  portion_ratio_range: '0.0002~0.5'
+  area_perimeter_ratio_range: '0.0005~0.1'
+  bubble_px_range: '10~1000000'
+  letter_px_range: '3~1000000'
+  bubble_px_ratio_range: '0.5~1.1'
+  letter_px_ratio_range: '0.003~0.5'
+  BnL_px_ratio_range: '0.6~1.1'
+  mask_px_ratio_range: '0.01~0.8'
+  edge_px_count_range: '0~15'
+  letter_area_range: '1~2000'
+  textblock_area_range: '1~3000000'
+  letter_cnts_range: '1~900'
+  textblock_letters_range: '1~1000'
+  note_area_range: '10~6000'
+  max_note_dist: 5
+  intersect_ratio: 0.8
+  seg_line_range: '50~500'
+  angle_px_step: 2,50
+  WBN_tolerance: 10,30,15
+char_condition:
+  px_area_range: '10~3000'
+  cnt_area_range: '10~3000'
+  thick_range: '4~4000'
+  brw_range: '28~40'
+  brh_range: '60~700'
+bubble_recognize:
+  WLB_ext_px: 10,20,10
+  # 用户设置的高度差异阈值
+  max_height_diff: 20
+  max_font_size: 150
+  kernel_depth: 10
+  block_ratio: 2
+  bubble_alpha: 0.5
+  bg_alpha: 0.5
+  WLB_alpha: 30,50,30
+  padding: 10
+bubble_seg:
+#  all_caps: true
+  all_caps: false
+#  adapt_big_letter: true
+  adapt_big_letter: false
+#  check_note: true
+  check_note: false
+#  check_dots: true
+  check_dots: false
+  check_intact: true
+#  check_intact: false
+  use_pivot_split: true
+#  use_pivot_split: false
+ocr_settings:
+  discard_ratio: 0.15
+  bold_thres: 1.2
+  y_thres: 8
+  bit_thres: 127
+#  print_tables: true
+  print_tables: false
+  #init_ocr: true
+  init_ocr: false
+  stitch_spacing: 50
+youdao:
+  app_id:
+  app_key:
+caiyun:
+  token: 3975l6lr5pcbvidl6jl2 # 公用
+baidu:
+  APP_ID:
+  SECRET_KEY:
+tencent:
+  APPID:
+  SecretId:
+  SecretKey:
+baidu_ocr:
+  APP_ID:
+  API_KEY:
+  SECRET_KEY:
+custom_ocr_engines:
+#  - 'Baidu'
+#  - 'BaiduAccu'
+  - 'Paddle'
+#  - 'Easy'
+prompt_prefix: '你是一名职业翻译，现在你的任务是翻译漫画，请把下列html翻译成中文，保留原格式，并以html格式输出。人名和专有名词也要翻译成中文。'
+img_ind: 26
+grid_ratio_dic:
+  Manga: 0.90 # 日漫黑白
+  Comic: 0.90 # 美漫彩色
+color_patterns:
+#  - 'ffffff-15~9f2862-15' # 白底红字
+#  - 'b9e6fb-15~000000-60' # 蓝底黑字
+#  - 'fff79a-15~000000-60' # 黄底黑字
+#  - 'fef7e5-15~000000-60' # 米底黑字
+#  - 'ffffff-15~0799b0-60' # 白底蓝字
+#  - '4e4c4d-15~fffcc2-60' # 灰底黄字
+#  - '3948a5-15~ffffff-60' # 蓝底白字
+#  - 'e2e319-15~000000-60' # 绿底黑字
+#  - '010101-15=667b8c-15~ffffff-60' # 黑灰底白字
+#  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
+color_pattern_dic:
+  Comic:
+    - 'ffffff-5~000000-60' # 白底黑字
+#    - '000000-15~ffffff-60' # 黑底白字
+#    - 'ffffff-60' # 白字
+#    - '000000-60' # 黑字
+  Manga:
+#    - 'ffffff-15~000000-60' # 白底黑字
