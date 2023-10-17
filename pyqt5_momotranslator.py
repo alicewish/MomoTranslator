@@ -8766,11 +8766,6 @@ if __name__ == "__main__":
     app_config = AppConfig.load()
 
     do_mode = app_config.config_data['do_mode']
-    if py_path.stem == 'pyqt5_momotranslator':
-        do_mode = 'do_roi'
-    elif py_path.stem == 'pyqt5_momotranslator_beta':
-        do_mode = 'do_qt'
-
     step_str = app_config.config_data['step_str']
     folder_name = app_config.config_data['folder_name']
     area_folder_name = app_config.config_data['area_folder_name']
@@ -9084,8 +9079,6 @@ if __name__ == "__main__":
         logger.info(f'{step_str=}')
         image_inds = [
             # 7,
-            # 13,
-            # 17,
         ]
         area_dic = get_area_dic(area_yml)
         folder_proc(img_folder, step_str, image_inds)
