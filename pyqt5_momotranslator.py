@@ -4792,7 +4792,7 @@ class MistWindow(QMainWindow):
             img_file = self.img_list[i]
             logger.warning(f'{img_file=}')
             pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
-            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, ocr_yml, i, self.img_list)
+            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, self.ocr_yml, i, self.img_list)
 
             self.pb_task.setValue(int(processed_imgs / len(self.img_list) * 100))
             QApplication.processEvents()
