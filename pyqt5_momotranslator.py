@@ -232,13 +232,10 @@ py_frag_path = py_path.parent / f'{py_path.stem}_frag.py'
 py_lite_path = py_path.parent / f'{py_path.stem}_lite.py'
 py_struct_path = py_path.parent / f'{py_path.stem}_struct.py'
 
-max_chars = 5000
+google_max_chars = 5000
 
 pictures_exclude = '加框,分框,框,涂白,填字,修图,-,copy,副本,拷贝,顺序,打码,测试,标注,边缘,标志,伪造'
 pic_tuple = tuple(pictures_exclude.split(','))
-
-docx_img_format = 'jpeg'
-# docx_img_format = 'png'
 
 spacing_ratio = 0.2
 
@@ -5897,6 +5894,9 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
             letter_mask = bitwise_and(letter_mask, CTD_mask)
 
         all_textblocks = get_textblocks(letter_mask, media_type)
+        all_textblocks = [x for x in all_textblocks if textblock_area_min <= x.block_cnt.area <= textblock_area_max]
+        all_textblocks = [x for x in all_textblocks if textblock_wmin <= x.block_cnt.br_w <= textblock_wmax]
+        all_textblocks = [x for x in all_textblocks if textblock_hmin <= x.block_cnt.br_h <= textblock_hmax]
         ordered_cnts = [x.expanded_cnt for x in all_textblocks]
 
         cp_raw_jpg = auto_subdir / f'{img_file.stem}-Raw-{color_letter.rgb_str}-{color_letter.color_name}.jpg'
@@ -6132,7 +6132,7 @@ def get_single_cnts(image_raw, mask_pics):
                 all_y = px_pts[:, 0]
                 logger.debug(f'{px_area=}')
 
-                if px_area >= 3:
+                if px_area >= 1:
                     # 计算不带padding的最小和最大x、y坐标
                     raw_min_x, raw_max_x = np.min(all_x), np.max(all_x)
                     raw_min_y, raw_max_y = np.min(all_y), np.max(all_y)
@@ -7206,6 +7206,8 @@ def better_text(input_text, ocr_type):
                     new_word = word_text
                 new_words.append(new_word)
             if new_words:
+                # 转义单个大括号
+                line = line.replace('{', '{{').replace('}', '}}')
                 line = sub(r'\b\w+\b', '{}', line).format(*new_words)
             else:
                 line = sub(r'\b\w+\b', '', line)
@@ -7603,10 +7605,8 @@ def run2ansi(run):
 
 # @logger.catch
 def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert):
-    pic_results = []
-    whiten_png = img_file.parent / f'{img_file.stem}-Whiten.png'
     logger.warning(f'{img_file=}')
-
+    pic_results = []
     stem_tup = ('stem', img_file.stem)
     pic_results.append(stem_tup)
 
@@ -7638,7 +7638,6 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
 
             # ================对裁剪后的图像进行文字识别================
             tess_zipped_data, pic_ocr_data = get_ocr_data('tesseract', pic_ocr_data, img_np, media_lang, 1)
-            rec_results_vision, pic_ocr_data = get_ocr_data('vision', pic_ocr_data, img_np, media_lang, 2)
             if 'Paddle' in custom_ocr_engines:
                 rec_results_paddle, pic_ocr_data = get_ocr_data('paddle', pic_ocr_data, img_np, media_lang, 2)
             if 'Easy' in custom_ocr_engines:
@@ -7651,8 +7650,14 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
 
             lines_tesseract = tesseract2text(tess_zipped_data)
             tesseract_text = lf.join(lines_tesseract)
-            lines_vision = rec2text(rec_results_vision)
-            vision_text = lf.join(lines_vision)
+
+            if SYSTEM in ['MAC', 'M1']:
+                rec_results_vision, pic_ocr_data = get_ocr_data('vision', pic_ocr_data, img_np, media_lang, 2)
+                lines_vision = rec2text(rec_results_vision)
+                vision_text = lf.join(lines_vision)
+            else:
+                rec_results_vision = None
+                vision_text = deepcopy(tesseract_text)
 
             refer_ocrs = []
             if 'Baidu' in custom_ocr_engines:
@@ -7678,12 +7683,15 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
 
             tesseract_text_format = better_text(tesseract_text, 'tesseract')
             refer_ocrs.append(tesseract_text_format)
-            vision_text_format = better_text(vision_text, 'vision')
-            # 优化 'worlds' 和 'its'
-            if 'worlds' in vision_text_format.lower() or 'its' in vision_text_format.lower():
-                vision_text_format = better_apostrophe(vision_text_format)
-            vision_text_format = fix_w_tess(vision_text_format, tesseract_text_format)
-            vision_text_format = better_punct(vision_text_format, refer_ocrs)
+            if SYSTEM in ['MAC', 'M1']:
+                vision_text_format = better_text(vision_text, 'vision')
+                # 优化 'worlds' 和 'its'
+                if 'worlds' in vision_text_format.lower() or 'its' in vision_text_format.lower():
+                    vision_text_format = better_apostrophe(vision_text_format)
+                vision_text_format = fix_w_tess(vision_text_format, tesseract_text_format)
+                vision_text_format = better_punct(vision_text_format, refer_ocrs)
+            else:
+                vision_text_format = deepcopy(tesseract_text_format)
 
             # ================获取气泡内文字的基本信息================
             raw_min_x, raw_min_y, raw_max_x, raw_max_y, min_x, min_y, max_x, max_y, center_pt = single_cnt.letter_coors
@@ -8195,7 +8203,7 @@ def step5_google_translate(simple_lines, target_lang):
     # 将文本分成多个块，以便在翻译时遵守最大字符数限制
     for line in simple_lines:
         # 检查将当前行添加到当前块后的长度是否超过最大字符数
-        if len(current_chunk) + len(line) + 1 > max_chars:  # 加1是为了考虑换行符
+        if len(current_chunk) + len(line) + 1 > google_max_chars:  # 加1是为了考虑换行符
             chunks.append(current_chunk.strip())
             current_chunk = ""
         current_chunk += line + "\n"
@@ -8855,6 +8863,8 @@ if __name__ == "__main__":
     edge_px_count_range = bubble_condition['edge_px_count_range']
     letter_area_range = bubble_condition['letter_area_range']
     textblock_area_range = bubble_condition['textblock_area_range']
+    textblock_wrange = bubble_condition['textblock_wrange']
+    textblock_hrange = bubble_condition['textblock_hrange']
     letter_cnts_range = bubble_condition['letter_cnts_range']
     textblock_letters_range = bubble_condition['textblock_letters_range']
     note_area_range = bubble_condition['note_area_range']
@@ -8897,6 +8907,8 @@ if __name__ == "__main__":
     edge_px_count_min, edge_px_count_max = parse_range(edge_px_count_range)
     letter_area_min, letter_area_max = parse_range(letter_area_range)
     textblock_area_min, textblock_area_max = parse_range(textblock_area_range)
+    textblock_wmin, textblock_wmax = parse_range(textblock_wrange)
+    textblock_hmin, textblock_hmax = parse_range(textblock_hrange)
     letter_cnts_min, letter_cnts_max = parse_range(letter_cnts_range)
     textblock_letters_min, textblock_letters_max = parse_range(textblock_letters_range)
     note_area_min, note_area_max = parse_range(note_area_range)
@@ -8917,13 +8929,13 @@ if __name__ == "__main__":
 
     bubble_recognize = app_config.config_data['bubble_recognize']
     WLB_ext_px = bubble_recognize['WLB_ext_px']
-    max_height_diff = bubble_recognize['max_height_diff']
     if ',' in str(WLB_ext_px):
         ext_pxs = WLB_ext_px.split(',')
         ext_pxs = [int(x) for x in ext_pxs]
         word_ext_px, line_ext_px, block_ext_px = ext_pxs
     else:
         word_ext_px = line_ext_px = block_ext_px = int(WLB_ext_px)
+    max_height_diff = bubble_recognize['max_height_diff']
     max_font_size = bubble_recognize['max_font_size']
     kernel_depth = bubble_recognize['kernel_depth']
     block_ratio = bubble_recognize['block_ratio']
@@ -9127,8 +9139,7 @@ if __name__ == "__main__":
             scaling_factor_reci = 1 / scaling_factor
             order_qt(appgui)
         if '3' in step_str:
-            pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang,
-                                  vert)
+            pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
             ocr_doc = Document()
             ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, ocr_yml, img_ind, img_list)
             write_docx(pic_ocr_docx, ocr_doc)
