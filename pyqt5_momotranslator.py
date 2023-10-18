@@ -4820,7 +4820,6 @@ class MistWindow(QMainWindow):
                 make_dir(self.auto_subdir)
 
                 if self.task_ind == 0:
-                    logger.debug(f'self.step0_analyze_frames()')
                     self.step0_analyze_frames()
                 elif self.task_ind == 1:
                     self.step1_analyze_bubbles()
@@ -8774,6 +8773,7 @@ if __name__ == "__main__":
 
     do_mode = app_config.config_data['do_mode']
     step_str = app_config.config_data['step_str']
+    docx_img_format = app_config.config_data['docx_img_format']
     folder_name = app_config.config_data['folder_name']
     area_folder_name = app_config.config_data['area_folder_name']
     browser = app_config.config_data['browser']
