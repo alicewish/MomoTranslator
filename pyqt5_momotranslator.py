@@ -24,7 +24,7 @@ from math import cos, floor, radians, sin, sqrt
 from operator import mod
 from os.path import abspath, dirname, exists, expanduser, getmtime, getsize, isdir, isfile, normpath
 from pathlib import Path
-from platform import processor, system, uname
+from platform import machine, processor, system, uname
 from pprint import pprint
 from re import I, IGNORECASE, Pattern, escape, findall, finditer, match, search, sub
 from shutil import copy2
@@ -3802,6 +3802,7 @@ class OrderWindow(QMainWindow):
         self.pics_widget.setLayout(self.vb_search_nav)
 
         self.pics_dock = QDockWidget(self.tr('Image List'), self)
+        self.pics_dock.setObjectName("PicsDock")
         self.pics_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.pics_dock.setWidget(self.pics_widget)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.pics_dock)
@@ -4219,6 +4220,7 @@ class MistWindow(QMainWindow):
 
         # 用于显示图片列表
         self.pics_dock = QDockWidget(self.tr('Image List'), self)
+        self.pics_dock.setObjectName("PicsDock")
         self.pics_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.pics_dock.setWidget(self.pics_widget)
 
