@@ -94,9 +94,11 @@ if use_torch:
 filterwarnings("ignore", category=DeprecationWarning)
 
 nlp = spacy.load("en_core_web_sm")
-# python3 -m spacy info en_core_web_sm
+# python3 -m spacy download en_core_web_sm #Mac
+# python.exe -m spacy download en_core_web_sm #Win
 
 
+# import nltk
 # nltk.download('words')
 # nltk.download('names')
 # nltk.download('wordnet')
@@ -179,6 +181,9 @@ if SYSTEM in ['MAC', 'M1']:
     from Quartz import kCGRenderingIntentDefault
     from Quartz.CoreGraphics import CGDataProviderCreateWithData, CGColorSpaceCreateDeviceRGB, CGImageCreate
     from Vision import VNImageRequestHandler, VNRecognizeTextRequest
+    processor_name = processor()
+else:
+    processor_name = machine()
 
 line_feeds = line_feed * 2
 
@@ -2563,7 +2568,7 @@ def order2yaml(order_yml, ordered_cnts, custom_cnts, img_file):
 class AppConfig:
     # 设置默认配置文件路径和用户配置文件路径
     default_config_yml = UserDataFolder / f'{APP_NAME}_config.yml'
-    user_config_yml = UserDataFolder / f'{APP_NAME}_{processor()}_{ram}GB_config.yml'
+    user_config_yml = UserDataFolder / f'{APP_NAME}_{processor_name}_{ram}GB_config.yml'
     master_config_yml = ProgramFolder / f'{APP_NAME}_master_config.yml'
     logger.debug(f'当前用户配置文件名为：{user_config_yml.name}')
 
@@ -8980,7 +8985,7 @@ if __name__ == "__main__":
     grid_ratio_dic = app_config.config_data['grid_ratio_dic']
     color_pattern_dic = app_config.config_data['color_pattern_dic']
 
-    font_meta_csv = UserDataFolder / f'字体信息_{processor()}_{ram}GB.csv'
+    font_meta_csv = UserDataFolder / f'字体信息_{processor_name}_{ram}GB.csv'
     font_head = ['字体文件名', '字体名', '字体PostScript名']
     font_meta_list = update_font_metadata(font_meta_csv, font_head)
 
