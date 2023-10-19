@@ -8991,6 +8991,7 @@ if __name__ == "__main__":
 
     font_filename = font_dic.get('微软雅黑')
     msyh_font_ttc = FontLibrary / font_filename
+    logger.debug(f'{msyh_font_ttc=}')
     msyh_font20 = ImageFont.truetype(msyh_font_ttc.as_posix(), 20)
     msyh_font30 = ImageFont.truetype(msyh_font_ttc.as_posix(), 30)
     msyh_font60 = ImageFont.truetype(msyh_font_ttc.as_posix(), 60)
