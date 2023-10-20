@@ -7303,6 +7303,7 @@ def calculate_similarity(lines1, lines2):
     return total_similarity / len(lines1) if lines1 else 0
 
 
+@logger.catch
 def get_final_token(token1, token2, up_ratio, is_sent_start, i1, i2, text1, line1):
     # 找到这个字母所在的完整单词
     word_start, word_end = i1, i2
@@ -9067,6 +9068,7 @@ if __name__ == "__main__":
             en_ocr = PaddleOCR(use_gpu=False, lang='en')
 
     logger.warning(f'{do_mode=}, {thread_method=}, {pic_thread_method=}')
+    area_dic = get_area_dic(area_yml)
     if do_qt:
         appgui = QApplication(sys.argv)
         translator = QTranslator()
@@ -9087,7 +9089,6 @@ if __name__ == "__main__":
         image_inds = [
             # 7,
         ]
-        area_dic = get_area_dic(area_yml)
         folder_proc(img_folder, step_str, image_inds)
     elif do_dev_pic:
         img_file = img_list[img_ind]
@@ -9120,7 +9121,6 @@ if __name__ == "__main__":
         vert = False  # 设置为True以识别竖排文本
         simple_stem = img_file.stem.removeprefix(cpre).removesuffix(csuf)
         pic_ocr_docx = img_folder.parent / f'{img_folder.name}-1识别-{simple_stem}.docx'
-        area_dic = get_area_dic(area_yml)
         if media_lang == 'Japanese':
             vert = True
 
