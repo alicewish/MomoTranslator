@@ -8995,10 +8995,10 @@ if __name__ == "__main__":
     font_filename = font_dic.get(global_font_name)
     msyh_font_ttc = system_font_dic.get(font_filename)
     logger.debug(f'{msyh_font_ttc=}')
-    msyh_font20 = ImageFont.truetype(msyh_font_ttc.as_posix(), 20)
-    msyh_font30 = ImageFont.truetype(msyh_font_ttc.as_posix(), 30)
-    msyh_font60 = ImageFont.truetype(msyh_font_ttc.as_posix(), 60)
-    msyh_font100 = ImageFont.truetype(msyh_font_ttc.as_posix(), 100)
+    msyh_font20 = ImageFont.truetype(msyh_font_ttc, 20)
+    msyh_font30 = ImageFont.truetype(msyh_font_ttc, 30)
+    msyh_font60 = ImageFont.truetype(msyh_font_ttc, 60)
+    msyh_font100 = ImageFont.truetype(msyh_font_ttc, 100)
 
     for mode in mode_list:
         globals()[mode] = (do_mode == mode)
