@@ -4801,7 +4801,7 @@ class MistWindow(QMainWindow):
             img_file = self.img_list[i]
             logger.warning(f'{img_file=}')
             pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
-            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, self.ocr_yml, i, self.img_list)
+            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, self.img_folder, i, self.img_list)
 
             self.pb_task.setValue(int(processed_imgs / len(self.img_list) * 100))
             QApplication.processEvents()
@@ -7758,7 +7758,8 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
 
 
 # @logger.catch
-def process_para(ocr_doc, pic_result, img_np):
+def process_para(ocr_doc, img_folder, pic_result, img_np):
+    auto_subdir = Auto / img_folder.name
     # ================文本================
     bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
     vision_lines = vision_text_format.splitlines()
@@ -7847,8 +7848,9 @@ def process_para(ocr_doc, pic_result, img_np):
                     pos_meta = word_imgs[w]
                     line_word = line_words[w]
                     text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-                    word_img_png = current_dir / f'word_{par_num}_{line_num}_{word_num}.png'
-                    write_pic(word_img_png, word_img)
+                    word_img_png = auto_subdir / f'word_{par_num}_{line_num}_{word_num}.png'
+                    if do_dev_pic:
+                        write_pic(word_img_png, word_img)
                     # 计算裁剪出的单词图片的黑色像素面积
                     # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
                     if isinstance(word_img, ndarray):
@@ -7910,7 +7912,8 @@ def add_pad2img(image, padding, bg_color=None):
 
 
 # @logger.catch
-def update_ocr_doc(ocr_doc, pic_results, ocr_yml, page_ind, img_list):
+def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
+    ocr_yml = img_folder.parent / f'{img_folder.name}-文字识别.yml'
     ocr_data = iload_data(ocr_yml)
     # 示例单词，长度为34
     sep_word = "supercalifragilisticexpialidocious"
@@ -7951,7 +7954,7 @@ def update_ocr_doc(ocr_doc, pic_results, ocr_yml, page_ind, img_list):
                     pic_width_inches = img_pil.width / image_dpi
                     ocr_doc.add_picture(temp_buffer, width=Inches(pic_width_inches))
             elif result_type == 'paragraph':
-                ocr_doc = process_para(ocr_doc, pic_result, cur_img_np)
+                ocr_doc = process_para(ocr_doc, img_folder, pic_result, cur_img_np)
         write_yml(ocr_yml, ocr_data)
         # ================生成并保存长图================
         if all_cropped_imgs:
@@ -8076,7 +8079,7 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
 
     ocr_doc = Document()
     for page_ind, pic_results in enumerate(all_pic_results):
-        ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, ocr_yml, page_ind, img_list)
+        ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list)
     return ocr_doc
 
 
@@ -8096,51 +8099,29 @@ def step4_readable(img_folder):
     read_docx = img_folder.parent / f'{img_folder.name}-3段落.docx'
     read_html = img_folder.parent / f'{img_folder.name}-3段落.html'
     img_list = get_valid_imgs(img_folder)
+    img_stems = [x.stem for x in img_list]
+
+    if not src_docx.exists():
+        logger.error(f'{src_docx}不存在')
+        return
 
     # 打开docx文件
     ocr_doc = Document(src_docx)
-    readable_doc = Document()
-
     # 读取并连接文档中的所有段落文本
-    full_text = []
-    for para in ocr_doc.paragraphs:
-        full_text.append(para.text)
+    ocr_full_paragraphs = [para.text for para in ocr_doc.paragraphs]
+    ocr_docx_index_dict, ocr_docx_inds = create_index_dict(img_stems, ocr_full_paragraphs)
 
-    # 创建一个字典，将图像文件名与其在文档中的位置关联起来
-    index_dict = {}
-    last_ind = 0
-    inds = []
-    for i in range(len(img_list)):
-        img_file = img_list[i]
-        if img_file.stem in full_text[last_ind:]:
-            ind = full_text[last_ind:].index(img_file.stem) + last_ind
-            index_dict[img_file.stem] = ind
-            inds.append(ind)
-            last_ind = ind
-    inds.append(len(full_text))
-
-    # 为每个图像文件创建一个段落字典
-    pin = 0
-    para_dic = {}
-    for i in range(len(img_list)):
-        img_file = img_list[i]
-        if img_file.stem in index_dict:
-            start_i = inds[pin] + 1
-            end_i = inds[pin + 1]
-            pin += 1
-            para_dic[img_file.stem] = full_text[start_i:end_i]
-
+    readable_doc = Document()
     # 把每个段落的多行文本改成单行文本，同时保留原始格式和样式
     for p in range(len(ocr_doc.paragraphs)):
         paragraph = ocr_doc.paragraphs[p]
         # 去除图片名称所在的行
-        if p not in inds:
+        if p not in ocr_docx_inds:
             para_text = paragraph.text
             para_lines = para_text.splitlines()
             if len(para_lines) >= 2:
                 meta_line = para_lines[0]
                 valid_para_lines = para_lines[1:]
-
                 # 将每句话首字母大写
                 single_line_text = ' '.join(valid_para_lines)
                 # 将文本分割成句子并保留句末标点符号
@@ -8149,13 +8130,10 @@ def step4_readable(img_folder):
                 capitalized_parts = [x.capitalize() for x in sentence_parts]
                 # 将处理后的句子连接成一个字符串
                 para_text_line = ''.join(capitalized_parts).strip()
-
                 if para_text_line != '':
                     new_para = readable_doc.add_paragraph()
-
                     start_pos = 0
                     runs = paragraph.runs
-
                     for r in range(len(runs)):
                         run = runs[r]
                         run_text_raw = run.text
@@ -8176,25 +8154,22 @@ def step4_readable(img_folder):
                         new_run.font.strike = run.font.strike
                         new_run.font.highlight_color = run.font.highlight_color
                         new_run.font.color.rgb = run.font.color.rgb
-
     write_docx(read_docx, readable_doc)
-    if read_docx.exists():
-        with open(read_docx, 'rb') as docx_file:
-            result = convert_to_html(docx_file)
-            result_html = result.value
-        result_html = result_html.replace(r'</p><p>', '</p>\n<p>')
-        write_txt(read_html, result_html)
-        # ================检查是否有俄罗斯字母================
-        soup = BeautifulSoup(result_html, 'html.parser')
-        text = soup.get_text()
-        lines = text.splitlines()
-        for line_number, line in enumerate(lines, start=1):
-            russian_chars = findall(r'[а-яА-ЯёЁ]', line)
-            if search(r'[а-яА-ЯёЁ]', line):
-                logger.warning(f"第{line_number}行: {line.strip()}")
-                # 查找并显示这一行中的俄罗斯字母
-                print(f"{''.join(russian_chars)}")
-    return readable_doc
+    with open(read_docx, 'rb') as docx_file:
+        result = convert_to_html(docx_file)
+        result_html = result.value
+    result_html = result_html.replace(r'</p><p>', '</p>\n<p>')
+    write_txt(read_html, result_html)
+    # ================检查是否有俄罗斯字母================
+    soup = BeautifulSoup(result_html, 'html.parser')
+    text = soup.get_text()
+    lines = text.splitlines()
+    for line_number, line in enumerate(lines, start=1):
+        russian_chars = findall(r'[а-яА-ЯёЁ]', line)
+        if search(r'[а-яА-ЯёЁ]', line):
+            logger.warning(f"第{line_number}行: {line.strip()}")
+            # 查找并显示这一行中的俄罗斯字母
+            print(f"{''.join(russian_chars)}")
 
 
 # @logger.catch
@@ -8611,6 +8586,7 @@ def get_dst_doc(src_docx, img_list, raw_html, dst_html):
     return new_doc
 
 
+@logger.catch
 def step5_translate(img_folder):
     src_docx = img_folder.parent / f'{img_folder.name}-2校对.docx'
     read_html = img_folder.parent / f'{img_folder.name}-3段落.html'
@@ -8620,7 +8596,7 @@ def step5_translate(img_folder):
     googletrans_txt = img_folder.parent / f'{img_folder.name}-9-api-谷歌翻译.txt'
     img_list = get_valid_imgs(img_folder)
     if not read_html.exists():
-        readable_doc = step4_readable(img_folder)
+        step4_readable(img_folder)
     if read_html.exists():
         read_html_text = read_txt(read_html)
         soup = BeautifulSoup(read_html_text, 'html.parser')
@@ -8667,9 +8643,7 @@ def folder_proc(img_folder, step_str, image_inds):
     img_list = get_valid_imgs(img_folder)
     auto_subdir = Auto / img_folder.name
     make_dir(auto_subdir)
-
     media_type = img_folder.parent.name.removesuffix('Process')
-
     if '0' in step_str:
         frame_data_sorted = step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, image_inds)
     if '1' in step_str:
@@ -8680,7 +8654,7 @@ def folder_proc(img_folder, step_str, image_inds):
         ocr_doc = step3_OCR(img_folder, media_type, media_lang, vert)
         write_docx(ocr_docx, ocr_doc)
     if '4' in step_str:
-        readable_doc = step4_readable(img_folder)
+        step4_readable(img_folder)
     if '5' in step_str:
         step5_translate(img_folder)
 
@@ -9150,5 +9124,5 @@ if __name__ == "__main__":
         if '3' in step_str:
             pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
             ocr_doc = Document()
-            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, ocr_yml, img_ind, img_list)
+            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, img_ind, img_list)
             write_docx(pic_ocr_docx, ocr_doc)
