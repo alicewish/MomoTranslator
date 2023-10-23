@@ -4190,6 +4190,7 @@ class MistWindow(QMainWindow):
         self.pixmap_item = QGraphicsPixmapItem()
         self.img_ind = -1
         self.display_mode = 0
+        self.order_mode = None
         # ================最近文件夹================
         self.recent_folders = []
         # ================设置================
@@ -4823,7 +4824,7 @@ class MistWindow(QMainWindow):
                 self.frame_yml = self.img_folder.parent / f'{self.img_folder.name}.yml'
                 self.order_yml = self.img_folder.parent / f'{self.img_folder.name}-气泡排序.yml'
                 self.ocr_yml = self.img_folder.parent / f'{self.img_folder.name}-文字识别.yml'
-                self.ocr_docx = self.img_folder.parent / f'{img_folder.name}-1识别.docx'
+                self.ocr_docx = self.img_folder.parent / f'{self.img_folder.name}-1识别.docx'
                 self.auto_subdir = Auto / self.img_folder.name
                 make_dir(self.auto_subdir)
 
