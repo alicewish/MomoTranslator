@@ -181,6 +181,7 @@ if SYSTEM in ['MAC', 'M1']:
     from Quartz import kCGRenderingIntentDefault
     from Quartz.CoreGraphics import CGDataProviderCreateWithData, CGColorSpaceCreateDeviceRGB, CGImageCreate
     from Vision import VNImageRequestHandler, VNRecognizeTextRequest
+
     processor_name = processor()
 else:
     processor_name = machine()
@@ -742,7 +743,7 @@ def get_valid_imgs(rootdir, mode='raw'):
 
 def iload_data(file_path, mode='yml'):
     if file_path.exists():
-        with open(file_path, 'r' if mode == 'yml' else 'rb') as file:
+        with open(file_path, 'r' if mode == 'yml' else 'rb', encoding='utf-8') as file:
             if mode == 'yml':
                 return yaml.safe_load(file)
             elif mode == 'pkl':
@@ -8694,7 +8695,6 @@ if __name__ == "__main__":
     MomoHanhua = DOCUMENTS / '默墨汉化'
     Auto = MomoHanhua / 'Auto'
     Log = MomoHanhua / 'Log'
-    FontLibrary = MomoHanhua / 'FontLibrary'
     ComicProcess = MomoHanhua / 'ComicProcess'
     MangaProcess = MomoHanhua / 'MangaProcess'
     ManhuaProcess = MomoHanhua / 'ManhuaProcess'
@@ -8992,8 +8992,8 @@ if __name__ == "__main__":
     font_head = ['字体文件名', '字体名', '字体PostScript名']
     font_meta_list = update_font_metadata(font_meta_csv, font_head)
 
-    font_filename = font_dic.get('微软雅黑')
-    msyh_font_ttc = FontLibrary / font_filename
+    font_filename = font_dic.get(global_font_name)
+    msyh_font_ttc = system_font_dic.get(font_filename)
     logger.debug(f'{msyh_font_ttc=}')
     msyh_font20 = ImageFont.truetype(msyh_font_ttc.as_posix(), 20)
     msyh_font30 = ImageFont.truetype(msyh_font_ttc.as_posix(), 30)
