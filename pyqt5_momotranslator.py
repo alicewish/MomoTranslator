@@ -4914,7 +4914,7 @@ def get_line_segments(mask, target_color='ffffff'):
     return segments
 
 
-# @logger.catch
+@logger.catch
 def get_combined_mask(slice1, slice2, slice3, lower_bound, upper_bound):
     mask1 = inRange(slice1, lower_bound, upper_bound)
     mask2 = inRange(slice2, lower_bound, upper_bound)
@@ -4925,6 +4925,7 @@ def get_combined_mask(slice1, slice2, slice3, lower_bound, upper_bound):
 
 # @logger.catch
 def get_added_frames(frame_grid_strs, image_raw, color_name0):
+    image_raw = toBGR(image_raw)
     directions = ['top', 'bottom', 'left', 'right']
     # 根据边框颜色获取绘制用颜色
     if color_name0 == 'white':
