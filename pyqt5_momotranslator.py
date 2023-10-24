@@ -3628,23 +3628,26 @@ class CustGraphicsScene(QGraphicsScene):
 
         # 确保输入数据是NumPy数组
         if isinstance(image_data, ndarray):
-            height, width, channel = image_data.shape
-            bytes_per_line = channel * width
-
-            if channel == 4:
-                # 如果输入图像有4个通道（带有Alpha通道）
-                qimage_format = QImage.Format_ARGB32
-            elif channel == 3:
-                # 如果输入图像有3个通道
-                # 如果输入图像使用BGR顺序，交换颜色通道以获得正确的RGB顺序
-                image_data = cvtColor(image_data, COLOR_BGR2RGB)
-                qimage_format = QImage.Format_RGB888
-            else:
-                # 其他情况暂不支持
-                raise ValueError("Unsupported number of channels in the input image.")
-
-            # 将NumPy数组转换为QImage
-            qimage = QImage(image_data.data, width, height, bytes_per_line, qimage_format)
+            # 检查图像是否是灰度图
+            if len(image_data.shape) == 2:  # 灰度图，只有高度和宽度
+                height, width = image_data.shape
+                bytes_per_line = width  # 灰度图像的每行字节数
+                qimage_format = QImage.Format_Grayscale8  # 灰度图像格式
+                # 将NumPy数组转换为QImage
+                qimage = QImage(image_data.data, width, height, bytes_per_line, qimage_format)
+            else:  # 彩色图像
+                height, width, channel = image_data.shape
+                bytes_per_line = channel * width
+                if channel == 4:
+                    # 如果输入图像有4个通道（带有Alpha通道）
+                    qimage_format = QImage.Format_ARGB32
+                elif channel == 3:
+                    # 如果输入图像有3个通道
+                    # 如果输入图像使用BGR顺序，交换颜色通道以获得正确的RGB顺序
+                    image_data = cvtColor(image_data, COLOR_BGR2RGB)
+                    qimage_format = QImage.Format_RGB888
+                # 将NumPy数组转换为QImage
+                qimage = QImage(image_data.data, width, height, bytes_per_line, qimage_format)
             # 将QImage转换为QPixmap
             pixmap = QPixmap.fromImage(qimage)
             # ================清除之前的图像================
