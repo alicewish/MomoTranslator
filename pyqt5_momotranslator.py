@@ -8088,6 +8088,39 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
 
 
 @timer_decorator
+def create_index_dict(file_stems, full_paragraphs, html_format=False):
+    """根据图片文件名（不包括扩展名）和段落列表创建索引字典和索引列表"""
+    index_dict = {}
+    last_ind = 0
+    inds = []
+    for i, stem in enumerate(file_stems):
+        formatted_stem = f'<p>{stem}</p>' if html_format else stem
+        if formatted_stem in full_paragraphs[last_ind:]:
+            ind = full_paragraphs[last_ind:].index(formatted_stem) + last_ind
+            index_dict[formatted_stem] = ind
+            inds.append(ind)
+            last_ind = ind
+    inds.append(len(full_paragraphs))
+    return index_dict, inds
+
+
+@timer_decorator
+def create_para_dic(file_stems, index_dict, inds, lines, html_format=False):
+    """根据图片文件名、索引字典、索引列表和行列表创建段落字典"""
+    pin = 0
+    para_dic = {}
+    for stem in file_stems:
+        formatted_stem = f'<p>{stem}</p>' if html_format else stem
+        if formatted_stem in index_dict:
+            start_i = inds[pin] + 1
+            end_i = inds[pin + 1]
+            pin += 1
+            stem_text_list = lines[start_i:end_i]
+            para_dic[formatted_stem] = stem_text_list
+    return para_dic
+
+
+@timer_decorator
 def step4_readable(img_folder):
     """
     该函数用于处理OCR识别后的docx文档，使其更易阅读。它将多行文本的段落转换为单行文本，
