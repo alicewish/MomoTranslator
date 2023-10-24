@@ -8132,11 +8132,15 @@ def step4_readable(img_folder):
     :param read_html: 可读化html文件路径。
     :return: new_doc: 处理后的易阅读的docx文档对象。
     """
+    ocr_docx = img_folder.parent / f'{img_folder.name}-1识别.docx'
     src_docx = img_folder.parent / f'{img_folder.name}-2校对.docx'
     read_docx = img_folder.parent / f'{img_folder.name}-3段落.docx'
     read_html = img_folder.parent / f'{img_folder.name}-3段落.html'
     img_list = get_valid_imgs(img_folder)
     img_stems = [x.stem for x in img_list]
+
+    if not src_docx.exists():
+        copy2(ocr_docx, src_docx)
 
     if not src_docx.exists():
         logger.error(f'{src_docx}不存在')
@@ -8641,7 +8645,7 @@ def step5_translate(img_folder):
         simple_lines = text.splitlines()
         read_html_mtime = getmtime(read_html)
         if not googletrans_txt.exists():
-            # ================如有更新则更新谷歌翻译================
+            # ================谷歌翻译================
             logger.debug('not googletrans_txt.exists()')
             translated_text = step5_google_translate(simple_lines, target_lang)
             write_txt(googletrans_txt, translated_text)
@@ -8658,7 +8662,14 @@ def step5_translate(img_folder):
                 # ================否则进行GPT4翻译================
                 logger.debug('进行GPT4翻译')
                 if not raw_html.exists():
-                    step5_chatgpt_translate(read_html, raw_html, target_lang)
+                    if SYSTEM in ['MAC', 'M1']:
+                        step5_chatgpt_translate(read_html, raw_html, target_lang)
+                    else:
+                        translated_text = read_txt(googletrans_txt)
+                        unescaped_texts = translated_text.splitlines()
+                        unescaped_texts = [f'<p>{x}</p>' for x in unescaped_texts]
+                        dst_html_text = lf.join(unescaped_texts)
+                        write_txt(raw_html, dst_html_text)
                 dst_doc = get_dst_doc(src_docx, img_list, raw_html, dst_html)
                 write_docx(dst_docx, dst_doc)
 
