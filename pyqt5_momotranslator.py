@@ -69,8 +69,8 @@ from natsort import natsorted
 from nltk.corpus import names, words
 from nltk.stem import WordNetLemmatizer
 from numpy import arange, argmax, argwhere, array, asarray, ascontiguousarray, clip, diff, float32, fromfile, greater, \
-    int32, maximum, minimum, mod, ndarray, nonzero, ones, sqrt, squeeze, subtract, \
-    transpose, uint8, unique, where, zeros, zeros_like
+    int32, maximum, minimum, mod, ndarray, nonzero, ones, sqrt, squeeze, subtract, transpose, uint8, unique, where, \
+    zeros, zeros_like
 from paddleocr import PaddleOCR
 from prettytable import PrettyTable
 from psd_tools import PSDImage
@@ -1064,7 +1064,7 @@ def write_csv(csv_path, data_input, headers=None):
         printe(e)
 
 
-# @logger.catch
+@logger.catch
 def write_pic(pic_path, picimg):
     pic_path = Path(pic_path)
     ext = pic_path.suffix
@@ -1086,19 +1086,18 @@ def write_pic(pic_path, picimg):
 
         # 检查图像是否为空
         if picimg is None or picimg.size == 0:
-            raise ValueError("The input image is empty.")
+            logger.error(f'{pic_path=}')
+            # raise ValueError("The input image is empty.")
+            return pic_path
 
         # 保存临时图像
         imencode(ext, picimg)[1].tofile(temp_pic)
-
     # 检查临时图像和目标图像的md5哈希和大小是否相同
     if not pic_path.exists() or md5_w_size(temp_pic) != md5_w_size(pic_path):
         copy2(temp_pic, pic_path)
-
     # 删除临时图像
     if temp_pic.exists():
         os.remove(temp_pic)
-
     return pic_path
 
 
@@ -7917,14 +7916,15 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
             # ================每一行================
             textline = textlines[t]
             br_x, br_y, br_w, br_h = textline.br
-            line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
-            line_in_img = deepcopy(white_img)
-            line_in_img[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1] = line_img
-            line_in_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}_in.png'
-            write_pic(line_in_img_png, line_in_img)
-            tess_zipped_data_line = ocr_by_tesseract(line_in_img, media_lang, vert=False)
-            ent_line_infos = get_line_infos(tess_zipped_data_line, line_in_img)
-            new_line_infos.extend(ent_line_infos)
+            if br_w >= 3 and br_h >= 1:
+                line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
+                line_in_img = deepcopy(white_img)
+                line_in_img[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1] = line_img
+                line_in_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}_in.png'
+                write_pic(line_in_img_png, line_in_img)
+                tess_zipped_data_line = ocr_by_tesseract(line_in_img, media_lang, vert=False)
+                ent_line_infos = get_line_infos(tess_zipped_data_line, line_in_img)
+                new_line_infos.extend(ent_line_infos)
         line_infos = new_line_infos
 
     # ================绘制每个单词的图像================
@@ -7963,16 +7963,18 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                 line_words = new_line_words
 
             # ================如果词数仍有差异则继续修正================
-            if len(tess_words) != len(line_words) and len(tess_words) != len(textwords):
-                new_word_imgs = []
-                for t in range(len(textwords)):
-                    textword = textwords[t]
-                    br_x, br_y, br_w, br_h = textword.br
-                    new_word_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
-                    word_img = [new_word_img]
-                    new_word_imgs.append(word_img)
-                if len(new_word_imgs) == len(line_words):
-                    word_imgs = new_word_imgs
+            if use_textwords:
+                if len(tess_words) != len(line_words) and len(tess_words) != len(textwords):
+                    new_word_imgs = []
+                    for t in range(len(textwords)):
+                        textword = textwords[t]
+                        br_x, br_y, br_w, br_h = textword.br
+                        if br_w >= 3 and br_h >= 1:
+                            new_word_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
+                            word_img = [new_word_img]
+                            new_word_imgs.append(word_img)
+                    if len(new_word_imgs) == len(line_words):
+                        word_imgs = new_word_imgs
             if len(word_imgs) == len(line_words):
                 # 词数相等时
                 for w in range(len(word_imgs)):
@@ -7981,6 +7983,13 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                     line_word = line_words[w]
                     # text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
                     word_img = pos_meta[-1]
+
+                    # 检查图像的维度
+                    if word_img.shape[0] == 0 or word_img.shape[1] == 0:
+                        logger.error(f'图片错误: {line_word}')
+                        logger.error(f'{pos_meta[:-1]=}')
+                        continue
+
                     # 计算裁剪出的单词图片的黑色像素面积
                     # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
                     if isinstance(word_img, ndarray):
@@ -7994,6 +8003,8 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                     pchars = [char for char in line_word if char in char_area_dict]
                     npchars = [char for char in line_word if char not in char_area_dict]
                     run_info = (line_word, '')
+                    if color_locate in italic_color_locates:
+                        run_info = (line_word, 'i')
                     # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
                     line_word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', line_word)
                     if not npchars or len(npchars) / len(line_word) <= 0.2:
@@ -8171,7 +8182,7 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
             long_img = add_pad2img(long_img, 20, color_white)
             write_pic(pic_text_png, long_img)
             for p, cropped_img in enumerate(all_cropped_imgs):
-                img_path = auto_subdir / f"Page{simple_stem}_Bubble{p:02}.jpg"
+                img_path = auto_subdir / f"P{simple_stem}_B{p}.jpg"
                 write_pic(img_path, cropped_img)
     else:
         logger.error(f'{page_ind=}')
@@ -9200,6 +9211,7 @@ if __name__ == "__main__":
     bit_thres = ocr_settings['bit_thres']
     print_tables = ocr_settings['print_tables']
     init_ocr = ocr_settings['init_ocr']
+    use_textwords = ocr_settings['use_textwords']
     stitch_spacing = ocr_settings['stitch_spacing']
 
     baidu_ocr = app_config.config_data['baidu_ocr']
@@ -9213,6 +9225,7 @@ if __name__ == "__main__":
     custom_ocr_engines = app_config.config_data['custom_ocr_engines']
     prompt_prefix = app_config.config_data['prompt_prefix']
     grid_ratio_dic = app_config.config_data['grid_ratio_dic']
+    italic_color_locates = app_config.config_data['italic_color_locates']
     color_pattern_dic = app_config.config_data['color_pattern_dic']
 
     font_meta_csv = UserDataFolder / f'字体信息_{processor_name}_{ram}GB.csv'
