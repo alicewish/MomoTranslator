@@ -1,5 +1,6 @@
+img_ind: 3
 #step_str: '012345678'
-step_str: '1'
+step_str: '3'
 #thread_method: 'queue'
 thread_method: 'concurrent'
 pic_thread_method: 'concurrent'
@@ -8,13 +9,13 @@ do_mode: 'do_qt'
 #do_mode: 'do_dev_pic'
 docx_img_format: 'jpeg'
 #docx_img_format: 'png'
-folder_name: 'A Righteous Thirst for Vengeance 002'
-area_folder_name: 'Phantom Road 001'
+folder_name: 'Almighty 002'
+area_folder_name: 'Drifter 015'
 #browser: 'Safari'
 browser: 'Google Chrome'
 thumb_size: 240
 window_size: 1200,800
-WBLDN_padding: 10,30,30,20,40
+WBLDN_padding: 60,60,30,20,40
 stem_level: 3
 media_lang: 'English'
 target_lang: 'zh-CN'
@@ -91,36 +92,36 @@ bubble_condition:
   br_ratio_range: '0.02~1.1'
   portion_ratio_range: '0.00002~0.5'
   area_perimeter_ratio_range: '0.0005~0.1'
-  bubble_px_range: '10~1000000'
-  letter_px_range: '3~1000000'
+  bubble_px_range: '100~1000000'
+  letter_px_range: '100~1000000'
   bubble_px_ratio_range: '0.5~1.1'
-  letter_px_ratio_range: '0.003~0.5'
+  letter_px_ratio_range: '0.001~0.5'
   BnL_px_ratio_range: '0.6~1.1'
   mask_px_ratio_range: '0.01~0.8'
   edge_px_count_range: '0~15'
   letter_area_range: '1~2000'
-  textblock_area_range: '100~3000000'
-  textblock_wrange: '100~1000'
-  textblock_hrange: '10~1000'
+  textblock_area_range: '1~3000000'
+  textblock_wrange: '1~1000'
+  textblock_hrange: '3~1000'
   letter_cnts_range: '1~900'
   textblock_letters_range: '1~1000'
   note_area_range: '10~6000'
   max_note_dist: 5
   intersect_ratio: 0.8
   seg_line_range: '50~500'
-  angle_px_step: 2,5
+  angle_px_step: 2,10
   WBN_tolerance: 10,30,15
 char_condition:
   px_area_range: '10~3000'
   cnt_area_range: '10~3000'
   thick_range: '4~4000'
-  brw_range: '8~100'
-  brh_range: '15~700'
+  brw_range: '12~100'
+  brh_range: '12~700'
 bubble_recognize:
-  WLB_ext_px: 8,30,5
-#  WLB_ext_px: 6,10,5
+#  WLB_ext_px: 10,88,15
+  WLB_ext_px: 4,40,10
   # 用户设置的高度差异阈值
-  max_height_diff: 30
+  max_height_diff: 12
   max_font_size: 150
   kernel_depth: 10
   block_ratio: 2
@@ -137,12 +138,12 @@ bubble_seg:
   check_note: false
 #  check_dots: true
   check_dots: false
-#  check_intact: true
-  check_intact: false
+  check_intact: true
+#  check_intact: false
   use_pivot_split: true
 #  use_pivot_split: false
 ocr_settings:
-  discard_ratio: 0.15
+  discard_ratio: 0.08
   bold_thres: 1.2
   y_thres: 8
   bit_thres: 127
@@ -150,6 +151,8 @@ ocr_settings:
   print_tables: false
   #init_ocr: true
   init_ocr: false
+  use_textwords: true
+#  use_textwords: false
   stitch_spacing: 50
 youdao:
   app_id:
@@ -173,10 +176,11 @@ custom_ocr_engines:
   - 'Paddle'
 #  - 'Easy'
 prompt_prefix: '你是一名职业翻译，现在你的任务是翻译漫画，请把下列html翻译成中文，保留原格式，并以html格式输出。人名和专有名词也要翻译成中文。'
-img_ind: 26
 grid_ratio_dic:
   Manga: 0.90 # 日漫黑白
   Comic: 0.90 # 美漫彩色
+italic_color_locates:
+  - 'fbab3c-fff3e5-000000'
 color_patterns:
 #  - 'ffffff-15~9f2862-15' # 白底红字
 #  - 'b9e6fb-15~000000-60' # 蓝底黑字
@@ -190,9 +194,9 @@ color_patterns:
 #  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
 color_pattern_dic:
   Comic:
-    - 'ffffff-10~000000-60' # 白底黑字
+    - 'ffffff-15~000000-60' # 白底黑字
 #    - '000000-15~ffffff-60' # 黑底白字
 #    - 'ffffff-60' # 白字
 #    - '000000-60' # 黑字
   Manga:
-#    - 'ffffff-15~000000-60' # 白底黑字
+    - 'ffffff-15~000000-60' # 白底黑字
