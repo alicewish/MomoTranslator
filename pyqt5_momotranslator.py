@@ -69,7 +69,7 @@ from natsort import natsorted
 from nltk.corpus import names, words
 from nltk.stem import WordNetLemmatizer
 from numpy import arange, argmax, argwhere, array, asarray, ascontiguousarray, clip, diff, float32, fromfile, greater, \
-    int32, maximum, mean, minimum, mod, ndarray, nonzero, ones, sqrt, squeeze, subtract, \
+    int32, maximum, minimum, mod, ndarray, nonzero, ones, sqrt, squeeze, subtract, \
     transpose, uint8, unique, where, zeros, zeros_like
 from paddleocr import PaddleOCR
 from prettytable import PrettyTable
@@ -322,6 +322,8 @@ proper_nouns = {
     'Insomnia',
 }
 
+sep_word = "supercalifragilisticexpialidocious"
+
 fine_words = [
     'jai',
     'jin',
@@ -431,16 +433,18 @@ similar_chars_map = {
     'д': 'A',
     'в': 'B',
     'В': 'B',
+    'ь': 'b',
+    'Ь': 'B',
     'е': 'e',
     'Е': 'E',
-    'и': 'u',
-    'И': 'U',
-    'к': 'k',
-    'К': 'K',
     'н': 'H',
     'Н': 'H',
     'Ы': 'H',
+    'І': 'I',
+    'к': 'k',
+    'К': 'K',
     'М': 'M',
+    'П': 'N',
     'о': 'o',
     'О': 'O',
     'р': 'p',
@@ -449,14 +453,14 @@ similar_chars_map = {
     'С': 'C',
     'т': 'T',
     'Т': 'T',
-    'у': 'y',
-    'У': 'Y',
+    'и': 'u',
+    'И': 'U',
     'х': 'x',
     'Х': 'X',
+    'у': 'y',
+    'У': 'Y',
     'ч': '4',
     'Ч': '4',
-    'ь': 'b',
-    'Ь': 'B',
 }
 
 special_keywords = [
@@ -741,14 +745,16 @@ def get_valid_imgs(rootdir, mode='raw'):
         return all_masks
 
 
-def iload_data(file_path, mode='yml'):
+def iload_data(file_path):
+    data_dic = {}
     if file_path.exists():
-        with open(file_path, 'r' if mode == 'yml' else 'rb', encoding='utf-8') as file:
-            if mode == 'yml':
-                return yaml.safe_load(file)
-            elif mode == 'pkl':
-                return pickle.load(file)
-    return {}
+        if file_path.suffix == '.yml':
+            with open(file_path, 'r', encoding='utf-8') as file:
+                data_dic = yaml.safe_load(file)
+        elif file_path.suffix == '.pkl':
+            with open(file_path, 'rb') as file:
+                data_dic = pickle.load(file)
+    return data_dic
 
 
 # @logger.catch
@@ -794,7 +800,8 @@ def cal_words_data(raw_words_data):
     discard_count = int(0.1 * len(heights))
     lower_bound = heights[discard_count]
     upper_bound = heights[-discard_count - 1]
-    words_data = [data for data in raw_words_data if lower_bound <= data[2] <= upper_bound]
+    words_data = [data for data in raw_words_data if lower_bound - 1 <= data[2] <= upper_bound + 1]
+    logger.debug(f'{len(raw_words_data)=}, {len(words_data)=}')
 
     # 对words_data进行处理，把表示我的I替换成|
     for i, (word, word_format, height, area) in enumerate(words_data):
@@ -823,6 +830,7 @@ def cal_words_data(raw_words_data):
             char_key = char
             if word_format != '':
                 char_key += f'_{word_format}'
+                # logger.debug(f'{char_key=}')
             A[i, char_to_index[char_key]] += 1
             appeared_chars.add(char_key)
         b[i] = area
@@ -833,7 +841,7 @@ def cal_words_data(raw_words_data):
     x, residuals, rank, s = np.linalg.lstsq(W @ A, W @ b, rcond=None)
 
     # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
-    char_to_area = {char: x[char_to_index[char]] for char in formatted_chars}  # 使用formatted_chars
+    char_to_area = {char: x[char_to_index[char]] for char in formatted_chars}
 
     # 输出结果
     char_table = PrettyTable()
@@ -911,13 +919,12 @@ def cal_words_data(raw_words_data):
 
 
 @timer_decorator
-# @logger.catch
-def get_area_dic(area_yml):
+@logger.catch
+def get_area_dic(area_yml, min_data_len=28):
     area_data = iload_data(area_yml)
     area_dic = {}
+    all_data = []
     for color_locate in area_data:
-        if print_tables:
-            print(color_locate)
         words_w_format_str = area_data[color_locate]
         words_w_format_str.sort()
         words_data = []
@@ -940,7 +947,12 @@ def get_area_dic(area_yml):
             height, black_px_area = map(int, nums_str.split(','))
             word_data = (word, word_format, height, black_px_area)
             words_data.append(word_data)
-        if len(words_data) >= 28:
+        data_tup = (color_locate, words_data)
+        all_data.append(data_tup)
+    for data_tup in all_data:
+        color_locate, words_data = data_tup
+        print(color_locate)
+        if len(words_data) >= min_data_len:
             char_area_dict, word_area_dict = cal_words_data(words_data)
             area_dic[color_locate] = (char_area_dict, word_area_dict)
     return area_dic
@@ -3780,7 +3792,7 @@ class OrderWindow(QMainWindow):
         self.all_masks = get_valid_imgs(self.img_folder, mode='mask')
         self.frame_data = iload_data(self.frame_yml)
         self.order_data = iload_data(self.order_yml)
-        self.cnts_dic = iload_data(self.cnts_dic_pkl, mode='pkl')
+        self.cnts_dic = iload_data(self.cnts_dic_pkl)
         self.filter_img_list = self.img_list
         self.img_ind = clamp(img_ind, 0, len(self.img_list) - 1)
         self.img_file = self.img_list[self.img_ind]
@@ -4003,7 +4015,7 @@ class OrderWindow(QMainWindow):
                 self.all_masks = get_valid_imgs(self.img_folder, mode='mask')
                 self.frame_data = iload_data(self.frame_yml)
                 self.order_data = iload_data(self.order_yml)
-                self.cnts_dic = iload_data(self.cnts_dic_pkl, mode='pkl')
+                self.cnts_dic = iload_data(self.cnts_dic_pkl)
                 self.filter_img_list = self.img_list
                 self.img_ind = 0
                 self.img_file = self.img_list[self.img_ind]
@@ -5276,6 +5288,15 @@ def water_seg(filled_contour, textblocks):
 
 # @logger.catch
 def get_textblocks(letter_in_contour, media_type, f=None):
+    color_input = False
+    # 确保图像是灰度的
+    if len(letter_in_contour.shape) == 3:  # 如果图像是彩色的
+        color_input = True
+        gray_letter_in_contour = cvtColor(letter_in_contour, COLOR_BGR2GRAY)  # 转换为灰度
+        # 二值化图像
+        ret, letter_in_contour = threshold(gray_letter_in_contour, 127, 255, THRESH_BINARY)
+        letter_in_contour = bitwise_not(letter_in_contour)  # 反色
+
     ih, iw = letter_in_contour.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
     if media_type == 'Comic':
@@ -5287,16 +5308,20 @@ def get_textblocks(letter_in_contour, media_type, f=None):
     kernal_word = kernel_hw(kh, kw)
 
     # letter_in_contour_inv = bitwise_not(letter_in_contour)
-    if do_dev_pic and f is not None:
-        letter_in_contour_png = current_dir / f'letter_in_contour_{f}.png'
+    if do_dev_pic:
+        if f is not None:
+            letter_in_contour_png = current_dir / f'letter_in_contour_{f}.png'
+        else:
+            letter_in_contour_png = current_dir / f'letter_in_contour.png'
         write_pic(letter_in_contour_png, letter_in_contour)
 
     # ================单字轮廓================
     raw_letter_cnts = []
     letter_cnts = []
-    if f is None:
+    if f is None and not color_input:
         # ================无框================
         letter_contours, letter_hierarchy = findContours(letter_in_contour, RETR_LIST, CHAIN_APPROX_SIMPLE)
+        logger.debug(f'{len(letter_contours)=}')
         for l in range(len(letter_contours)):
             letter_contour = letter_contours[l]
             letter_cnt = Contr(letter_contour)
@@ -5338,7 +5363,10 @@ def get_textblocks(letter_in_contour, media_type, f=None):
         word_in_contour = dilate(letter_in_contour, kernal_word, iterations=1)
         word_contours, word_hierarchy = findContours(word_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
         if do_dev_pic:
-            word_in_contour_png = current_dir / f'letter_in_contour_{f}_dilated.png'
+            if f is not None:
+                word_in_contour_png = current_dir / f'letter_in_contour_{f}_dilated.png'
+            else:
+                word_in_contour_png = current_dir / f'letter_in_contour_dilated.png'
             write_pic(word_in_contour_png, word_in_contour)
         word_cnts = []
         for w in range(len(word_contours)):
@@ -6872,6 +6900,40 @@ def get_order_preview(marked_frames, single_cnts_grids):
     return blended_img
 
 
+@timer_decorator
+# @logger.catch
+def step2_order(img_folder, media_type):
+    img_list = get_valid_imgs(img_folder)
+    frame_yml = img_folder.parent / f'{img_folder.name}.yml'
+    order_yml = img_folder.parent / f'{img_folder.name}-气泡排序.yml'
+    cnts_dic_pkl = img_folder.parent / f'{img_folder.name}.pkl'
+    frame_data = iload_data(frame_yml)
+    order_data = iload_data(order_yml)
+    cnts_dic = iload_data(cnts_dic_pkl)
+    # ================气泡蒙版================
+    all_masks = get_valid_imgs(img_folder, mode='mask')
+    if thread_method == 'queue':
+        for i in range(len(img_list)):
+            img_file = img_list[i]
+            img_file, ordered_cnts = order1pic(img_file, frame_data, order_data, all_masks, media_type)
+            if ordered_cnts:
+                cnts_dic[img_file] = ordered_cnts
+    else:
+        with ThreadPoolExecutor(os.cpu_count()) as executor:
+            futures = [executor.submit(order1pic, img_file, frame_data, order_data, all_masks, media_type)
+                       for img_file in img_list]
+            for future in as_completed(futures):
+                try:
+                    img_file, ordered_cnts = future.result()
+                    if ordered_cnts:
+                        cnts_dic[img_file] = ordered_cnts
+                except Exception as e:
+                    printe(e)
+
+    with open(cnts_dic_pkl, 'wb') as f:
+        pickle.dump(cnts_dic, f)
+
+
 def get_line_imgs(cropped_img, c):
     gray_cropped_img = cvtColor(cropped_img, COLOR_BGR2GRAY)
     # 二值化图像
@@ -6943,6 +7005,64 @@ def tesseract2text(tess_zipped_data):
     return lines_tesseract
 
 
+def get_bubble_metadata(bubble_meta_str):
+    """
+    从元数据字符串中提取气泡的各项属性。
+
+    :param bubble_meta_str (str): 包含气泡元数据的字符串。
+
+    :return: dict: 一个包含气泡属性的字典。
+    """
+    # 分割元数据字符串
+    bubble_meta_list = bubble_meta_str.split('~')
+
+    # 解析气泡的各项属性
+    coors_str = bubble_meta_list[0]
+    src_font_size = int(bubble_meta_list[1].removeprefix('S'))
+    dst_font_size = int(bubble_meta_list[2].removeprefix('D'))
+    bubble_shape = bubble_meta_list[3]
+    text_direction = bubble_meta_list[4]
+    text_alignment = bubble_meta_list[5]
+
+    bubble_color_str = ''
+    if len(bubble_meta_list) == 9:
+        bubble_color_str = bubble_meta_list[6]
+
+    letter_color_str = bubble_meta_list[-2]
+    letter_font_name = bubble_meta_list[-1]
+
+    # 解析坐标
+    coors = [int(x) for x in coors_str.split(',')]
+    min_x, min_y, br_w, br_h = coors
+
+    # 计算中心点坐标
+    center_x = min_x + br_w / 2
+    center_y = min_y + br_h / 2
+    center_pt = (int(center_x), int(center_y))
+
+    # 将解析的属性数据放入一个字典中
+    bubble_metadata = {
+        'coordinates': {
+            'min_x': min_x,
+            'min_y': min_y,
+            'br_w': br_w,
+            'br_h': br_h,
+            'center_x': center_x,
+            'center_y': center_y,
+            'center_pt': center_pt,
+        },
+        'src_font_size': src_font_size,
+        'dst_font_size': dst_font_size,
+        'bubble_shape': bubble_shape,
+        'text_direction': text_direction,
+        'text_alignment': text_alignment,
+        'bubble_color_str': bubble_color_str,
+        'letter_color_str': letter_color_str,
+        'letter_font_name': letter_font_name
+    }
+    return bubble_metadata
+
+
 # 'level': 层次结构中的级别。1 表示页面级别，2 表示区域级别，3 表示段落级别，4 表示文本行级别，5 表示单词级别。
 # 'page_num': 页码。
 # 'block_num': 区域编号。
@@ -6996,64 +7116,12 @@ def tesseract2meta(img_np, tess_zipped_data, ocr_para):
 
     # 获取气泡元数据
     bubble_meta_str = ocr_para.runs[0].text
-    bubble_meta_list = bubble_meta_str.split('~')
-    coors_str = bubble_meta_list[0]
-    src_font_size = bubble_meta_list[1].removeprefix('S')
-    dst_font_size = bubble_meta_list[2].removeprefix('D')
-    src_font_size = int(src_font_size)
-    dst_font_size = int(dst_font_size)
-    bubble_shape = bubble_meta_list[3]
-    text_direction = bubble_meta_list[4]
-    text_alignment = bubble_meta_list[5]
-    bubble_color_str = ''
-    if len(bubble_meta_list) == 9:
-        bubble_color_str = bubble_meta_list[-3]
-    letter_color_str = bubble_meta_list[-2]
-    letter_font_name = bubble_meta_list[-1]
-    # 获取气泡坐标
-    coors = coors_str.split(',')
-    coors = [int(x) for x in coors]
-    min_x, min_y, br_w, br_h = coors
+    bubble_metadata = get_bubble_metadata(bubble_meta_str)
+    bubble_color_str = bubble_metadata['bubble_color_str']
+    letter_color_str = bubble_metadata['letter_color_str']
+    line_infos = get_line_infos(tess_zipped_data, img_np)
 
-    # 计算中心点坐标
-    center_x = min_x + br_w / 2
-    center_y = min_y + br_h / 2
-    center_pt = (int(center_x), int(center_y))
-
-    tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
-    par_nums = [x[3] for x in tess_zipped_data5]
-    par_nums = reduce_list(par_nums)
-    par_nums.sort()
-    line_nums = [x[4] for x in tess_zipped_data5]
-    line_nums = reduce_list(line_nums)
-    line_nums.sort()
     words_w_format = []
-    line_infos = []
-    for par_num in par_nums:
-        # 每个段落
-        for line_num in line_nums:
-            # 每一行
-            line_data = [x for x in tess_zipped_data5 if x[3] == par_num and x[4] == line_num]
-            line_data.sort(key=lambda x: x[5])
-            word_imgs = []
-            for l in range(len(line_data)):
-                # 每个单词
-                word_data = line_data[l]
-                level, page_num, block_num, par_num, line_num, word_num, left, top, width, height, conf, text = word_data
-                word_br = (left, top, width, height)
-                br_area = width * height
-                # 裁剪出单词
-                crop_br = (top, top + height, left, left + width)
-                word_img = img_np[top - 1:top + height + 1, left - 1:left + width + 1]
-                # 检查图像是否为空或维度是否为0
-                if word_img.size == 0 or word_img.shape[0] == 0 or word_img.shape[1] == 0:
-                    logger.error(f'{crop_br=}')
-                elif text != '':
-                    pos_meta = (text, par_num, line_num, word_num, left, top, width, height, conf, word_img)
-                    word_imgs.append(pos_meta)
-            if word_imgs:
-                line_infos.append(word_imgs)
-
     if len(ocr_lines) == len(line_infos):
         # 行数相等时
         for l in range(len(line_infos)):
@@ -7062,14 +7130,12 @@ def tesseract2meta(img_np, tess_zipped_data, ocr_para):
             ocr_line = ocr_lines[l]
             tess_words = [x[0] for x in word_imgs]
             ocr_words = [x[0] for x in ocr_line]
-            if len(word_imgs) == len(ocr_line):
+            if len(tess_words) == len(ocr_line):
                 # 词数相等时
                 for w in range(len(word_imgs)):
                     # 每一词
                     pos_meta = word_imgs[w]
                     text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-                    word_img_png = current_dir / f'word_{par_num}_{line_num}_{word_num}.png'
-                    write_pic(word_img_png, word_img)
                     # 计算裁剪出的单词图片的黑色像素面积
                     # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
                     if isinstance(word_img, ndarray):
@@ -7086,7 +7152,7 @@ def tesseract2meta(img_np, tess_zipped_data, ocr_para):
             else:
                 logger.error(f'词数不相等, {tess_words=}, {ocr_words=}')
     else:
-        logger.error(f'行数不相等,{ocr_para.text=}')
+        logger.error(f'行数不相等, [{len(ocr_lines)}-{len(line_infos)}]{ocr_para.text=}')
     return bubble_color_str, letter_color_str, words_w_format
 
 
@@ -7113,14 +7179,14 @@ def get_ocr_data(ocr_engine, pic_ocr_data, img_np, media_lang, elements_num):
 def rec2text(rec_results):
     lines_vision = []
     current_line = []
-    current_y = None
+    last_y = None
+    last_h = None
     for r in range(len(rec_results)):
         rec_result = rec_results[r]
-        y = rec_result[1]
-        text_seg = rec_result[-1]
+        x, y, w, h, conf, text_seg = rec_result
         good_text = "".join([similar_chars_map.get(c, c) for c in text_seg])
         # 检查 y 值
-        if current_y is not None and abs(y - current_y) <= y_thres:
+        if last_y is not None and abs(y - last_y) <= y_thres and 0.45 * last_h <= h <= 1.6 * last_h:
             # 如果 y 值相近，添加到当前行
             current_line.append(good_text)
         else:
@@ -7128,10 +7194,10 @@ def rec2text(rec_results):
             if current_line:
                 lines_vision.append(' '.join(current_line))
             current_line = [good_text]
-            current_y = y
-
-    # 添加最后一行
+            last_y = y
+            last_h = h
     if current_line:
+        # 添加最后一行
         lines_vision.append(' '.join(current_line))
     return lines_vision
 
@@ -7689,7 +7755,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
                 paddle_text_format = better_text(paddle_text, 'paddle')
                 refer_ocrs.append(paddle_text_format)
             if 'Easy' in custom_ocr_engines:
-                lines_easy = rec2text(rec_results_easy)
+                lines_easy = [x[-1] for x in rec_results_easy]
                 easy_text = lf.join(lines_easy)
                 easy_text_format = better_text(easy_text, 'easy')
                 refer_ocrs.append(easy_text_format)
@@ -7761,48 +7827,8 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
     return pic_results
 
 
-# @logger.catch
-def process_para(ocr_doc, img_folder, pic_result, img_np):
-    auto_subdir = Auto / img_folder.name
-    # ================文本================
-    bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
-    vision_lines = vision_text_format.splitlines()
-    # ================获取气泡元数据================
-    bubble_meta_list = bubble_meta_str.split('~')
-    coors_str = bubble_meta_list[0]
-    src_font_size = bubble_meta_list[1].removeprefix('S')
-    dst_font_size = bubble_meta_list[2].removeprefix('D')
-    src_font_size = int(src_font_size)
-    dst_font_size = int(dst_font_size)
-    bubble_shape = bubble_meta_list[3]
-    text_direction = bubble_meta_list[4]
-    text_alignment = bubble_meta_list[5]
-    bubble_color_str = ''
-    if len(bubble_meta_list) == 9:
-        bubble_color_str = bubble_meta_list[6]
-    letter_color_str = bubble_meta_list[-2]
-    letter_font_name = bubble_meta_list[-1]
-    # 获取气泡坐标
-    coors = coors_str.split(',')
-    coors = [int(x) for x in coors]
-    min_x, min_y, br_w, br_h = coors
-
-    # 计算中心点坐标
-    center_x = min_x + br_w / 2
-    center_y = min_y + br_h / 2
-    center_pt = (int(center_x), int(center_y))
-
-    color_locate = f'{bubble_color_str}-{letter_color_str}'
-    char_area_dict, word_actual_areas_dict = {}, {}
-    if color_locate in area_dic:
-        char_area_dict, word_actual_areas_dict = area_dic[color_locate]
-
-    # ================添加段落================
-    new_para = ocr_doc.add_paragraph()
-    # ================气泡数据================
-    new_run = new_para.add_run(bubble_meta_str)
-    new_run = new_para.add_run(lf)  # 软换行
-    # ================每一个对话框================
+def get_line_infos(tess_zipped_data, img_np):
+    line_infos = []
     tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
     par_nums = [x[3] for x in tess_zipped_data5]
     par_nums = reduce_list(par_nums)
@@ -7810,8 +7836,6 @@ def process_para(ocr_doc, img_folder, pic_result, img_np):
     line_nums = [x[4] for x in tess_zipped_data5]
     line_nums = reduce_list(line_nums)
     line_nums.sort()
-
-    line_infos = []
     for par_num in par_nums:
         # 每个段落
         for line_num in line_nums:
@@ -7836,25 +7860,127 @@ def process_para(ocr_doc, img_folder, pic_result, img_np):
                     word_imgs.append(pos_meta)
             if word_imgs:
                 line_infos.append(word_imgs)
+    return line_infos
 
+
+@logger.catch
+def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
+    logger.warning(f'[{page_ind=}]{bubble_ind=}')
+    auto_subdir = Auto / img_folder.name
+
+    # ================全白图像================
+    height, width = img_np.shape[:2]  # 获取原始图像的尺寸
+    white_img = ones((height, width, 3), dtype=uint8) * 255
+    # ================文本================
+    bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
+    vision_lines = vision_text_format.splitlines()
+    # ================获取气泡元数据================
+    bubble_meta_list = bubble_meta_str.split('~')
+    bubble_metadata = get_bubble_metadata(bubble_meta_str)
+    bubble_color_str = bubble_metadata['bubble_color_str']
+    letter_color_str = bubble_metadata['letter_color_str']
+    # ================获取每一行图像================
+    all_textblocks = get_textblocks(img_np, media_type)
+    bubble_textblock = all_textblocks[0]
+    textlines = bubble_textblock.textlines
+    if do_dev_pic:
+        textblock_bubbles = get_textblock_bubbles(img_np, all_textblocks)
+        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{len(bubble_textblock.textlines)}].jpg'
+        write_pic(cp_textblock_jpg, textblock_bubbles)
+    for t in range(len(textlines)):
+        textline = textlines[t]
+        br_x, br_y, br_w, br_h = textline.br
+        line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
+        line_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}.png'
+        write_pic(line_img_png, line_img)
+
+    color_locate = f"{bubble_color_str}-{letter_color_str}"
+    logger.warning(f'{color_locate=}')
+    char_area_dict, word_actual_areas_dict = {}, {}
+    if color_locate in area_dic:
+        char_area_dict, word_actual_areas_dict = area_dic[color_locate]
+    # ================黑字或白字强制使用白底黑字================
+    if letter_color_str in ['000000', 'ffffff'] and 'ffffff-000000' in area_dic:
+        char_area_dict, word_actual_areas_dict = area_dic['ffffff-000000']
+
+    # ================添加段落================
+    new_para = ocr_doc.add_paragraph()
+    # ================气泡数据================
+    new_run = new_para.add_run(bubble_meta_str)
+    new_run = new_para.add_run(lf)  # 软换行
+    # ================每一个对话框================
+    line_infos = get_line_infos(tess_zipped_data, img_np)
+    # ================如果行数有差异则进行修正================
+    if len(line_infos) != len(vision_lines) and len(line_infos) != len(textlines):
+        new_line_infos = []
+        for t in range(len(textlines)):
+            # ================每一行================
+            textline = textlines[t]
+            br_x, br_y, br_w, br_h = textline.br
+            line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
+            line_in_img = deepcopy(white_img)
+            line_in_img[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1] = line_img
+            line_in_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}_in.png'
+            write_pic(line_in_img_png, line_in_img)
+            tess_zipped_data_line = ocr_by_tesseract(line_in_img, media_lang, vert=False)
+            ent_line_infos = get_line_infos(tess_zipped_data_line, line_in_img)
+            new_line_infos.extend(ent_line_infos)
+        line_infos = new_line_infos
+
+    # ================绘制每个单词的图像================
+    for l in range(len(line_infos)):
+        # 每一行
+        word_imgs = line_infos[l]
+        for w in range(len(word_imgs)):
+            # 每一词
+            pos_meta = word_imgs[w]
+            text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
+            word_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_A{par_num}_L{l + 1}_W{word_num}.png'
+            write_pic(word_img_png, word_img)
+
+    run_infos = []
     if len(vision_lines) == len(line_infos):
         # 行数相等时
         for l in range(len(line_infos)):
             # 每一行
             word_imgs = line_infos[l]
             ocr_line = vision_lines[l]
+            textline = textlines[l]
+            textwords = textline.textwords
             tess_words = [x[0] for x in word_imgs]
             line_words = ocr_line.split(' ')
+            # ================如果词数有差异则进行修正================
+            if len(tess_words) != len(line_words):
+                new_line_words = []
+                for l in range(len(line_words)):
+                    line_word = line_words[l]
+                    if '…' in line_word:
+                        a, par, b = line_word.partition('…')
+                        new_line_words.append(f'{a}{par}')
+                        new_line_words.append(b)
+                    else:
+                        new_line_words.append(line_word)
+                line_words = new_line_words
+
+            # ================如果词数仍有差异则继续修正================
+            if len(tess_words) != len(line_words) and len(tess_words) != len(textwords):
+                new_word_imgs = []
+                for t in range(len(textwords)):
+                    textword = textwords[t]
+                    br_x, br_y, br_w, br_h = textword.br
+                    new_word_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
+                    word_img = [new_word_img]
+                    new_word_imgs.append(word_img)
+                if len(new_word_imgs) == len(line_words):
+                    word_imgs = new_word_imgs
             if len(word_imgs) == len(line_words):
                 # 词数相等时
                 for w in range(len(word_imgs)):
                     # 每一词
                     pos_meta = word_imgs[w]
                     line_word = line_words[w]
-                    text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-                    word_img_png = auto_subdir / f'word_{par_num}_{line_num}_{word_num}.png'
-                    if do_dev_pic:
-                        write_pic(word_img_png, word_img)
+                    # text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
+                    word_img = pos_meta[-1]
                     # 计算裁剪出的单词图片的黑色像素面积
                     # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
                     if isinstance(word_img, ndarray):
@@ -7865,33 +7991,81 @@ def process_para(ocr_doc, img_folder, pic_result, img_np):
                     binary_img = gray_img.point(lambda x: 0 if x <= bit_thres else 255, '1')
                     # 计算黑色像素的数量（假设黑色像素的值为0）
                     black_px_area = binary_img.histogram()[0]
-                    all_chars_present = all(char in char_area_dict for char in line_word)
-                    new_run = new_para.add_run(line_word)
-
+                    pchars = [char for char in line_word if char in char_area_dict]
+                    npchars = [char for char in line_word if char not in char_area_dict]
+                    run_info = (line_word, '')
                     # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
                     line_word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', line_word)
-                    if all_chars_present:
+                    if not npchars or len(npchars) / len(line_word) <= 0.2:
                         if line_word in word_actual_areas_dict:
                             word_actual_areas = word_actual_areas_dict[line_word]
                             expect_area = sum(word_actual_areas) / len(word_actual_areas)
                         else:
-                            expect_area = sum([char_area_dict[char] for char in line_word])
-                        refer_ratio = black_px_area / expect_area
-                        if refer_ratio >= bold_thres:
-                            logger.debug(f'{refer_ratio=:.2f}')
-                            new_run.bold = True
-                            new_run.italic = True
+                            exp_areas = []
+                            for char in line_word:
+                                # 移除重音符号
+                                normalized_char = normalize('NFD', char).encode('ascii', 'ignore').decode('utf-8')
+                                if char in char_area_dict:
+                                    # 如果字符在字典中，直接使用其面积
+                                    exp_area = char_area_dict[char]
+                                else:
+                                    # 如果标准化后的字符在字典中，使用其面积
+                                    if normalized_char in char_area_dict:
+                                        exp_area = char_area_dict[normalized_char]
+                                    else:
+                                        logger.warning(f'{char=}')
+                                        exp_area = 5
+                                exp_areas.append(exp_area)
+                            expect_area = sum(exp_areas)
+                        if expect_area == 0:
+                            logger.warning(f'{expect_area=}')
+                        else:
+                            refer_ratio = black_px_area / expect_area
+                            if refer_ratio >= bold_thres:
+                                logger.warning(f'[{refer_ratio:.2f}]{line_word}')
+                                run_info = (line_word, 'bi')
+                    else:
+                        imes = f'[{line_word}]'
+                        if pchars and npchars:
+                            imes += f'{pchars=}, {npchars=}'
+                        elif pchars and not npchars:
+                            imes += f'{pchars=}'
+                        elif not pchars:
+                            imes += f'{npchars=}'
+                        logger.error(imes)
+                    run_infos.append(run_info)
                     if w != len(word_imgs) - 1:
-                        # 如果不是最后一个词就添加空格
-                        new_run = new_para.add_run(' ')
+                        # 如果不是最后一词就添加空格
+                        run_info = (' ', '')
+                        run_infos.append(run_info)
             else:
-                new_run = new_para.add_run(f'{ocr_line}')
+                run_info = (ocr_line, '')
+                run_infos.append(run_info)
                 logger.error(f'词数不相等,{tess_words=},{line_words=}')
             if l != len(line_infos) - 1:
-                new_run = new_para.add_run(lf)
+                # 如果不是最后一行就添加换行
+                run_info = (lf, '')
+                run_infos.append(run_info)
     else:
-        new_run = new_para.add_run(vision_text_format)
-        logger.error(f'行数不相等,{vision_text_format=}')
+        run_info = (vision_text_format, '')
+        run_infos.append(run_info)
+        logger.error(f'行数不相等, [{len(vision_lines)}-{len(line_infos)}]')
+        logger.error(f'{vision_text_format}')
+        for l in range(len(line_infos)):
+            word_imgs = line_infos[l]
+            words = [x[0] for x in word_imgs]
+            logger.debug(f'{words=}')
+
+    for r in range(len(run_infos)):
+        run_info = run_infos[r]
+        line_word, form = run_info
+        if line_word not in [' ', lf]:
+            logger.debug(f'[{line_word}]')
+        new_run = new_para.add_run(line_word)
+        if 'b' in form:
+            new_run.bold = True
+        if 'i' in form:
+            new_run.italic = True
     ocr_doc.add_paragraph('')
     return ocr_doc
 
@@ -7915,12 +8089,11 @@ def add_pad2img(image, padding, bg_color=None):
     return padded_img
 
 
-# @logger.catch
+@logger.catch
 def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
     ocr_yml = img_folder.parent / f'{img_folder.name}-文字识别.yml'
     ocr_data = iload_data(ocr_yml)
     # 示例单词，长度为34
-    sep_word = "supercalifragilisticexpialidocious"
     font_color = "black"
 
     img_stems = [x.stem for x in img_list]
@@ -7933,6 +8106,7 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
     all_cropped_imgs = []
     cur_img_np = None
     if pic_results:
+        bubble_ind = 1
         for p, pic_result in enumerate(pic_results):
             result_type = pic_result[0]
             if result_type == 'stem':
@@ -7958,7 +8132,8 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
                     pic_width_inches = img_pil.width / image_dpi
                     ocr_doc.add_picture(temp_buffer, width=Inches(pic_width_inches))
             elif result_type == 'paragraph':
-                ocr_doc = process_para(ocr_doc, img_folder, pic_result, cur_img_np)
+                ocr_doc = process_para(ocr_doc, img_folder, pic_result, cur_img_np, page_ind, bubble_ind)
+                bubble_ind += 1
         write_yml(ocr_yml, ocr_data)
         # ================生成并保存长图================
         if all_cropped_imgs:
@@ -8004,41 +8179,7 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
 
 
 @timer_decorator
-# @logger.catch
-def step2_order(img_folder, media_type):
-    img_list = get_valid_imgs(img_folder)
-    frame_yml = img_folder.parent / f'{img_folder.name}.yml'
-    order_yml = img_folder.parent / f'{img_folder.name}-气泡排序.yml'
-    cnts_dic_pkl = img_folder.parent / f'{img_folder.name}.pkl'
-    frame_data = iload_data(frame_yml)
-    order_data = iload_data(order_yml)
-    cnts_dic = iload_data(cnts_dic_pkl, mode='pkl')
-    # ================气泡蒙版================
-    all_masks = get_valid_imgs(img_folder, mode='mask')
-    if thread_method == 'queue':
-        for i in range(len(img_list)):
-            img_file = img_list[i]
-            img_file, ordered_cnts = order1pic(img_file, frame_data, order_data, all_masks, media_type)
-            if ordered_cnts:
-                cnts_dic[img_file] = ordered_cnts
-    else:
-        with ThreadPoolExecutor(os.cpu_count()) as executor:
-            futures = [executor.submit(order1pic, img_file, frame_data, order_data, all_masks, media_type)
-                       for img_file in img_list]
-            for future in as_completed(futures):
-                try:
-                    img_file, ordered_cnts = future.result()
-                    if ordered_cnts:
-                        cnts_dic[img_file] = ordered_cnts
-                except Exception as e:
-                    printe(e)
-
-    with open(cnts_dic_pkl, 'wb') as f:
-        pickle.dump(cnts_dic, f)
-
-
-# @timer_decorator
-# @logger.catch
+@logger.catch
 def step3_OCR(img_folder, media_type, media_lang, vert):
     """
     对给定文件夹中的图像进行OCR识别，并将结果保存到一个docx文件中。
@@ -8092,32 +8233,44 @@ def create_index_dict(file_stems, full_paragraphs, html_format=False):
     """根据图片文件名（不包括扩展名）和段落列表创建索引字典和索引列表"""
     index_dict = {}
     last_ind = 0
-    inds = []
+    indexes = []
     for i, stem in enumerate(file_stems):
         formatted_stem = f'<p>{stem}</p>' if html_format else stem
         if formatted_stem in full_paragraphs[last_ind:]:
             ind = full_paragraphs[last_ind:].index(formatted_stem) + last_ind
             index_dict[formatted_stem] = ind
-            inds.append(ind)
+            indexes.append(ind)
             last_ind = ind
-    inds.append(len(full_paragraphs))
-    return index_dict, inds
+    indexes.append(len(full_paragraphs))
+    return index_dict, indexes
 
 
 @timer_decorator
-def create_para_dic(file_stems, index_dict, inds, lines, html_format=False):
+def create_para_dic(file_stems, index_dict, indexes, lines, html_format=False):
     """根据图片文件名、索引字典、索引列表和行列表创建段落字典"""
     pin = 0
     para_dic = {}
     for stem in file_stems:
         formatted_stem = f'<p>{stem}</p>' if html_format else stem
         if formatted_stem in index_dict:
-            start_i = inds[pin] + 1
-            end_i = inds[pin + 1]
+            start_i = indexes[pin] + 1
+            end_i = indexes[pin + 1]
             pin += 1
             stem_text_list = lines[start_i:end_i]
             para_dic[formatted_stem] = stem_text_list
     return para_dic
+
+
+def get_para_text_line(valid_para_lines):
+    # 将每句话首字母大写
+    single_line_text = ' '.join(valid_para_lines)
+    # 将文本分割成句子并保留句末标点符号
+    sentence_parts = re.split(r'( *[.?!…]+[\'")\]，。？！]* *)', single_line_text)
+    # 对每个句子进行首字母大写处理
+    capitalized_parts = [x.capitalize() for x in sentence_parts]
+    # 将处理后的句子连接成一个字符串
+    para_text_line = ''.join(capitalized_parts).strip()
+    return para_text_line
 
 
 @timer_decorator
@@ -8132,12 +8285,18 @@ def step4_readable(img_folder):
     :param read_html: 可读化html文件路径。
     :return: new_doc: 处理后的易阅读的docx文档对象。
     """
+    stitch_docx = img_folder.parent / f'{img_folder.name}-1拼接.docx'
     ocr_docx = img_folder.parent / f'{img_folder.name}-1识别.docx'
     src_docx = img_folder.parent / f'{img_folder.name}-2校对.docx'
     read_docx = img_folder.parent / f'{img_folder.name}-3段落.docx'
     read_html = img_folder.parent / f'{img_folder.name}-3段落.html'
+    read_txt = img_folder.parent / f'{img_folder.name}-3段落.txt'
+    read_stitch_txt = img_folder.parent / f'{img_folder.name}-3拼接段落.txt'
     img_list = get_valid_imgs(img_folder)
     img_stems = [x.stem for x in img_list]
+    cpre = common_prefix(img_stems)
+    csuf = common_suffix(img_stems)
+    simple_stems = [x.removeprefix(cpre).removesuffix(csuf) for x in img_stems]
 
     if not src_docx.exists():
         copy2(ocr_docx, src_docx)
@@ -8163,14 +8322,8 @@ def step4_readable(img_folder):
             if len(para_lines) >= 2:
                 meta_line = para_lines[0]
                 valid_para_lines = para_lines[1:]
-                # 将每句话首字母大写
-                single_line_text = ' '.join(valid_para_lines)
-                # 将文本分割成句子并保留句末标点符号
-                sentence_parts = re.split(r'( *[.?!…]+[\'")\]，。？！]* *)', single_line_text)
-                # 对每个句子进行首字母大写处理
-                capitalized_parts = [x.capitalize() for x in sentence_parts]
-                # 将处理后的句子连接成一个字符串
-                para_text_line = ''.join(capitalized_parts).strip()
+
+                para_text_line = get_para_text_line(valid_para_lines)
                 if para_text_line != '':
                     new_para = readable_doc.add_paragraph()
                     start_pos = 0
@@ -8201,16 +8354,67 @@ def step4_readable(img_folder):
         result_html = result.value
     result_html = result_html.replace(r'</p><p>', '</p>\n<p>')
     write_txt(read_html, result_html)
-    # ================检查是否有俄罗斯字母================
+
+    # ================提取纯文本================
     soup = BeautifulSoup(result_html, 'html.parser')
-    text = soup.get_text()
-    lines = text.splitlines()
+    plain_text = soup.get_text()
+    write_txt(read_txt, plain_text)
+    # ================检查是否有俄罗斯字母================
+    lines = plain_text.splitlines()
     for line_number, line in enumerate(lines, start=1):
         russian_chars = findall(r'[а-яА-ЯёЁ]', line)
         if search(r'[а-яА-ЯёЁ]', line):
             logger.warning(f"第{line_number}行: {line.strip()}")
             # 查找并显示这一行中的俄罗斯字母
             print(f"{''.join(russian_chars)}")
+
+    if stitch_docx.exists():
+        stitch_doc = Document(stitch_docx)
+        # 读取并连接文档中的所有段落文本
+        stitch_full_paragraphs = [para.text for para in stitch_doc.paragraphs]
+
+        index_dict = {}
+        last_ind = 0
+        indexes = []
+        for i, simple_stem in enumerate(simple_stems):
+            formatted_stem = f'{img_folder.name}-1拼接-{simple_stem}'
+            if formatted_stem in stitch_full_paragraphs[last_ind:]:
+                ind = stitch_full_paragraphs[last_ind:].index(formatted_stem) + last_ind
+                index_dict[formatted_stem] = ind
+                indexes.append(ind)
+                last_ind = ind
+        indexes.append(len(stitch_full_paragraphs))
+
+        bubbles = []
+        bubble = []
+        for p in range(len(stitch_doc.paragraphs)):
+            paragraph = stitch_doc.paragraphs[p]
+            para_text = paragraph.text
+            if p in indexes:
+                # 图片名所在的行
+                if bubble:
+                    bubbles.append(bubble)
+                    bubble = []
+                logger.warning(f'{para_text=}')
+            elif para_text != '':
+                if para_text == sep_word:
+                    if not bubble:
+                        bubble = ['']
+                    bubbles.append(bubble)
+                    bubble = []
+                else:
+                    bubble.append(para_text)
+                logger.debug(f'{para_text=}')
+        if bubble:
+            bubbles.append(bubble)
+        stitch_lines = []
+        for b in range(len(bubbles)):
+            bubble = bubbles[b]
+            para_text_line = get_para_text_line(bubble)
+            stitch_lines.append(para_text_line)
+        stitch_full_text = lf.join(stitch_lines)
+        stitch_full_text = sub(r'\.{2,}', '…', stitch_full_text)
+        write_txt(read_stitch_txt, stitch_full_text)
 
 
 # @logger.catch
@@ -8589,20 +8793,20 @@ def get_dst_doc(src_docx, img_list, raw_html, dst_html):
     # 创建一个字典，将图像文件名与其在文档中的位置关联起来
     index_dict = {}
     last_ind = 0
-    inds = []
+    indexes = []
     for i in range(len(img_list)):
         img_file = img_list[i]
         if img_file.stem in full_text[last_ind:]:
             ind = full_text[last_ind:].index(img_file.stem) + last_ind
             index_dict[img_file.stem] = ind
-            inds.append(ind)
+            indexes.append(ind)
             last_ind = ind
-    inds.append(len(full_text))
+    indexes.append(len(full_text))
 
     dst_pin = 0
     for p in range(len(ocr_doc.paragraphs)):
         paragraph = ocr_doc.paragraphs[p]
-        if p in inds:
+        if p in indexes:
             # 图片名称所在的行
             pic_name = paragraph.text
             simple_stem = pic_name.removeprefix(cpre).removesuffix(csuf)
@@ -8803,6 +9007,7 @@ if __name__ == "__main__":
     app_config = AppConfig.load()
 
     do_mode = app_config.config_data['do_mode']
+    img_ind = app_config.config_data['img_ind']
     step_str = app_config.config_data['step_str']
     docx_img_format = app_config.config_data['docx_img_format']
     folder_name = app_config.config_data['folder_name']
@@ -9007,7 +9212,6 @@ if __name__ == "__main__":
 
     custom_ocr_engines = app_config.config_data['custom_ocr_engines']
     prompt_prefix = app_config.config_data['prompt_prefix']
-    img_ind = app_config.config_data['img_ind']
     grid_ratio_dic = app_config.config_data['grid_ratio_dic']
     color_pattern_dic = app_config.config_data['color_pattern_dic']
 
