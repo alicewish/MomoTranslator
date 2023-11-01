@@ -7559,16 +7559,16 @@ def fix_w_tess(text1, text2):
                     if ori_word == "C'ON" and token2 == 'M':
                         # 检查是否是C'ON变成C'MON的情况
                         final_token = token2
-                        print(f'[{final_token}]')
+                        logger.debug(f'[{final_token=}]')
                     elif token2 == '-' and i1 > 0 and line1[i1 - 1] == '-':
                         # 如果在-之后插入一个-，接受这个插入
                         final_token = token2
-                        print(f'[{final_token}]')
+                        logger.debug(f'[{final_token=}]')
                     elif len(token2) == 1 and token2.isalpha() and len(ori_word) >= 1:
                         # 检查这个单词是否是一个“合理的”单词
                         if ori_word.lower() not in good_words and rep_word.lower() in good_words or rep_word.lower() in fine_words:
                             final_token = token2
-                            print(f'[{final_token}]')
+                            logger.debug(f'[{final_token=}]')
                     elif match(r'[a-zA-Z]', token2) or match(r'\s*\d+$', token2) or match(r'\s+', token2):
                         # 忽略纯字母、纯数字和纯空格的插入
                         pass
@@ -7580,12 +7580,12 @@ def fix_w_tess(text1, text2):
                         final_token = adjust_sent(token1, token2, text1, adj_text1)
                     else:
                         final_token = token2
-                        print(f'[{final_token}]')
+                        logger.debug(f'[{final_token=}]')
                 elif tag == 'delete':
                     final_token = token1
 
                 pin += len(token1)
-                new_line1 += final_token
+                new_line1 += f'{final_token}'
             # 将处理后的新行添加到结果列表中
             new_lines1.append(new_line1)
             # 计算空格
@@ -7880,19 +7880,23 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     letter_color_str = bubble_metadata['letter_color_str']
     # ================获取每一行图像================
     all_textblocks = get_textblocks(img_np, media_type)
-    bubble_textblock = all_textblocks[0]
-    textlines = bubble_textblock.textlines
+    lines_num = 0
+    if all_textblocks:
+        bubble_textblock = all_textblocks[0]
+        textlines = bubble_textblock.textlines
+        lines_num = len(bubble_textblock.textlines)
+        for t in range(len(textlines)):
+            textline = textlines[t]
+            br_x, br_y, br_w, br_h = textline.br
+            line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
+            line_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}.png'
+            write_pic(line_img_png, line_img)
+    else:
+        textlines = []
     if do_dev_pic:
         textblock_bubbles = get_textblock_bubbles(img_np, all_textblocks)
-        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{len(bubble_textblock.textlines)}].jpg'
+        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{lines_num}].jpg'
         write_pic(cp_textblock_jpg, textblock_bubbles)
-    for t in range(len(textlines)):
-        textline = textlines[t]
-        br_x, br_y, br_w, br_h = textline.br
-        line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
-        line_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}.png'
-        write_pic(line_img_png, line_img)
-
     color_locate = f"{bubble_color_str}-{letter_color_str}"
     logger.warning(f'{color_locate=}')
     char_area_dict, word_actual_areas_dict = {}, {}
@@ -7945,8 +7949,6 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
             # 每一行
             word_imgs = line_infos[l]
             ocr_line = vision_lines[l]
-            textline = textlines[l]
-            textwords = textline.textwords
             tess_words = [x[0] for x in word_imgs]
             line_words = ocr_line.split(' ')
             # ================如果词数有差异则进行修正================
@@ -7963,7 +7965,9 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                 line_words = new_line_words
 
             # ================如果词数仍有差异则继续修正================
-            if use_textwords:
+            if use_textwords and l < len(textlines):
+                textline = textlines[l]
+                textwords = textline.textwords
                 if len(tess_words) != len(line_words) and len(tess_words) != len(textwords):
                     new_word_imgs = []
                     for t in range(len(textwords)):
@@ -8023,6 +8027,8 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                                     # 如果标准化后的字符在字典中，使用其面积
                                     if normalized_char in char_area_dict:
                                         exp_area = char_area_dict[normalized_char]
+                                    elif char.lower() in char_area_dict:
+                                        exp_area = char_area_dict[char.lower()]
                                     else:
                                         logger.warning(f'{char=}')
                                         exp_area = 5
