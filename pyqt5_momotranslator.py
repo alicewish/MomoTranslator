@@ -920,10 +920,20 @@ def cal_words_data(raw_words_data):
 
 @timer_decorator
 @logger.catch
-def get_area_dic(area_yml, min_data_len=28):
-    area_data = iload_data(area_yml)
+def get_area_dic(area_folder_names):
+    min_data_len = 28
+    area_data = defaultdict(list)
     area_dic = {}
     all_data = []
+
+    if area_folder_names is None:
+        area_folder_names = []
+    for area_folder_name in area_folder_names:
+        area_img_folder = ComicProcess / area_folder_name
+        sub_area_yml = area_img_folder.parent / f'{area_img_folder.name}-文字面积.yml'
+        sub_area_data = iload_data(sub_area_yml)
+        for key, val in sub_area_data.items():
+            area_data[key].extend(val)
     for color_locate in area_data:
         words_w_format_str = area_data[color_locate]
         words_w_format_str.sort()
@@ -2532,7 +2542,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             condition_b7 = 1.5 <= border_thickness <= 5
             condition_b8 = (len(max_out_letter_cnts) == 0)
             condition_b9 = mask_px_ratio_min <= mask_px_ratio <= mask_px_ratio_max
-            condition_b10 = len(dot_cnts) <= 40
+            condition_b10 = len(dot_cnts) <= 50
             condition_b11 = letter_cnts_min <= len(letter_cnts) <= letter_cnts_max
             condition_bs = [
                 condition_b1,
@@ -4788,7 +4798,7 @@ class MistWindow(QMainWindow):
             if mask_pics:
                 single_cnts = get_single_cnts(image_raw, mask_pics)
                 logger.debug(f'{len(single_cnts)=}')
-                single_cnts_grids = get_ordered_cnts(single_cnts, image_raw, grid_masks, bubble_order_strs, media_type)
+                single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
                 ordered_cnts = list(chain(*single_cnts_grids))
                 order_preview = get_order_preview(marked_frames, single_cnts_grids)
                 write_pic(order_preview_jpg, order_preview)
@@ -6708,9 +6718,22 @@ def sort_bubble(cnt, ax, origin_x, origin_y):
     return val
 
 
+def get_new_grids(single_cnts_grids):
+    cxys = set()  # 使用集合来存储cxy值
+    new_grids = []
+    for single_cnts_grid in single_cnts_grids:
+        # 使用列表推导式来构建新的grid，同时更新cxys集合
+        new_grid = [single_cnt for single_cnt in single_cnts_grid if single_cnt.cxy not in cxys]
+        # 更新cxys集合
+        cxys.update(single_cnt.cxy for single_cnt in new_grid)
+        new_grids.append(new_grid)
+    return new_grids
+
+
 # @logger.catch
 @timer_decorator
-def get_ordered_cnts(single_cnts, image_raw, grid_masks, bubble_order_strs, media_type):
+def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type):
+    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
     ih, iw = image_raw.shape[0:2]
     black_bg = zeros((ih, iw), uint8)
 
@@ -6799,9 +6822,13 @@ def get_ordered_cnts(single_cnts, image_raw, grid_masks, bubble_order_strs, medi
                         cnts_in_bulk_grid.append(cnts_in_bulk)
                 single_cnts_grid_ordered = list(chain(*cnts_in_bulk_grid))
                 if bubble_order_strs:
-                    # 根据bubble_order_strs中的cxy_str顺序对single_cnts_grid_ordered进行排序
-                    single_cnts_grid_ordered.sort(key=lambda cnt: bubble_order_strs.index(cnt.cxy_str))
+                    try:
+                        # 根据bubble_order_strs中的cxy_str顺序对single_cnts_grid_ordered进行排序
+                        single_cnts_grid_ordered.sort(key=lambda cnt: bubble_order_strs.index(cnt.cxy_str))
+                    except ValueError as e:
+                        logger.error(f'{img_file=}')
                 single_cnts_grids.append(single_cnts_grid_ordered)
+    single_cnts_grids = get_new_grids(single_cnts_grids)
     return single_cnts_grids
 
 
@@ -6824,7 +6851,7 @@ def order1pic(img_file, frame_data, order_data, all_masks, media_type):
     if mask_pics:
         single_cnts = get_single_cnts(image_raw, mask_pics)
         logger.debug(f'{len(single_cnts)=}')
-        single_cnts_grids = get_ordered_cnts(single_cnts, image_raw, grid_masks, bubble_order_strs, media_type)
+        single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
         ordered_cnts = list(chain(*single_cnts_grids))
         order_preview = get_order_preview(marked_frames, single_cnts_grids)
         write_pic(order_preview_jpg, order_preview)
@@ -7559,16 +7586,16 @@ def fix_w_tess(text1, text2):
                     if ori_word == "C'ON" and token2 == 'M':
                         # 检查是否是C'ON变成C'MON的情况
                         final_token = token2
-                        logger.debug(f'[{final_token=}]')
+                        logger.debug(f'{final_token=}')
                     elif token2 == '-' and i1 > 0 and line1[i1 - 1] == '-':
                         # 如果在-之后插入一个-，接受这个插入
                         final_token = token2
-                        logger.debug(f'[{final_token=}]')
+                        logger.debug(f'{final_token=}')
                     elif len(token2) == 1 and token2.isalpha() and len(ori_word) >= 1:
                         # 检查这个单词是否是一个“合理的”单词
                         if ori_word.lower() not in good_words and rep_word.lower() in good_words or rep_word.lower() in fine_words:
                             final_token = token2
-                            logger.debug(f'[{final_token=}]')
+                            logger.debug(f'{final_token=}')
                     elif match(r'[a-zA-Z]', token2) or match(r'\s*\d+$', token2) or match(r'\s+', token2):
                         # 忽略纯字母、纯数字和纯空格的插入
                         pass
@@ -7580,11 +7607,14 @@ def fix_w_tess(text1, text2):
                         final_token = adjust_sent(token1, token2, text1, adj_text1)
                     else:
                         final_token = token2
-                        logger.debug(f'[{final_token=}]')
+                        logger.debug(f'{final_token=}')
                 elif tag == 'delete':
                     final_token = token1
 
                 pin += len(token1)
+                if final_token is None:
+                    logger.error(f'{final_token=}')
+                    final_token = ''
                 new_line1 += f'{final_token}'
             # 将处理后的新行添加到结果列表中
             new_lines1.append(new_line1)
@@ -7702,7 +7732,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
         single_cnts = get_single_cnts(image_raw, mask_pics)
         logger.debug(f'{len(single_cnts)=}')
 
-        single_cnts_grids = get_ordered_cnts(single_cnts, image_raw, grid_masks, bubble_order_strs, media_type)
+        single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
         ordered_cnts = list(chain(*single_cnts_grids))
 
         for c in range(len(ordered_cnts)):
@@ -9028,7 +9058,7 @@ if __name__ == "__main__":
     step_str = app_config.config_data['step_str']
     docx_img_format = app_config.config_data['docx_img_format']
     folder_name = app_config.config_data['folder_name']
-    area_folder_name = app_config.config_data['area_folder_name']
+    area_folder_names = app_config.config_data['area_folder_names']
     browser = app_config.config_data['browser']
     thumb_size = app_config.config_data['thumb_size']
     window_size = app_config.config_data['window_size']
@@ -9250,11 +9280,7 @@ if __name__ == "__main__":
         globals()[mode] = (do_mode == mode)
 
     img_folder = ComicProcess / folder_name
-    area_img_folder = ComicProcess / area_folder_name
     # img_folder = MangaProcess / folder_name
-    # area_img_folder = MangaProcess / area_folder_name
-
-    area_yml = area_img_folder.parent / f'{area_img_folder.name}-文字面积.yml'
 
     auto_subdir = Auto / img_folder.name
     make_dir(auto_subdir)
@@ -9314,7 +9340,7 @@ if __name__ == "__main__":
             en_ocr = PaddleOCR(use_gpu=False, lang='en')
 
     logger.warning(f'{do_mode=}, {thread_method=}, {pic_thread_method=}')
-    area_dic = get_area_dic(area_yml)
+    area_dic = get_area_dic(area_folder_names)
     if do_qt:
         appgui = QApplication(sys.argv)
         translator = QTranslator()
