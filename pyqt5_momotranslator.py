@@ -2570,7 +2570,8 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
         filter_index = filter_inds[g]
         filter_cnt = all_cnts[filter_index]
         filter_cnts.append(filter_cnt)
-        print(f'[{g + 1}]{filter_cnt.br=},{filter_cnt.area=:.0f},{filter_cnt.perimeter=:.2f}')
+        # print(f'[{g + 1}]{filter_cnt.br=},{filter_cnt.area=:.0f},{filter_cnt.perimeter=:.2f}')
+        print(f'[{g + 1}]{filter_cnt=}')
 
     return filter_cnts
 
@@ -2908,7 +2909,7 @@ class Contr:
         return result > 0  # 如果返回的距离为正，当前轮廓在另一个轮廓内部
 
     def __str__(self):
-        return f"{self.type}({self.area:.1f}, {self.perimeter:.2f}){self.br}"
+        return f"{self.type}([A]{self.area:.1f}, [P]{self.perimeter:.2f})[BR]{self.br}"
 
     def __repr__(self):
         return f'{self}'
@@ -3105,6 +3106,7 @@ class iTextBlock:
             [x, y + h]
         ]).reshape((-1, 1, 2)).astype(int32)
         self.expanded_cnt = Contr(self.expanded_contour)
+        # self.expanded_cnt = self.block_cnt
 
     def add_textline(self, textline):
         self.textlines.append(textline)
@@ -6245,34 +6247,43 @@ def get_single_cnts(image_raw, mask_pics):
     return single_cnts
 
 
-# @logger.catch
+def parse_color_parts(parts):
+    """
+    解析颜色部分，生成颜色信息。
+
+    :param parts: 分割后的颜色字符串列表。
+    :return: 颜色信息字符串或列表。
+    """
+    if len(parts) == 4:
+        # 如果有四个部分，说明有两种颜色
+        return [f'{parts[0]}-{parts[2]}', f'{parts[1]}-{parts[3]}']
+    elif len(parts) == 2:
+        # 如果有两个部分，说明只有一种颜色
+        return f'{parts[0]}-{parts[1]}'
+    return ''  # 如果没有颜色信息，返回空字符串
+
+
+@logger.catch
 def get_color_pattern(mask_pic):
     mask_prefix, par, cp_str = mask_pic.stem.partition('-Mask-')
     # 先切分气泡颜色和文字颜色
+    # 白底黑字
     # ffffff-15-white~000000-60-black
+    # 渐变底黑字
     # 75a1ba-c3d7d8-cadetblue-lightgray~000000-black
-    a_str, partition, b_str = cp_str.partition('~')
-    a_parts = a_str.split('-')
-    if b_str == '':
-        color_pattern = [
-            '',
-            f'{a_parts[0]}-{a_parts[1]}',
-        ]
+    # 无框双色字
+    # 595ca9-a8dcea-slateblue-lightblue
+    left_str, partition, right_str = cp_str.partition('~')
+    left_parts = left_str.split('-')
+    if right_str == '':
+        # 无框
+        right_parts = deepcopy(left_parts)
+        left_parts = []
     else:
-        b_parts = b_str.split('-')
-        if len(a_parts) == 4:
-            color_pattern = [
-                [
-                    f'{a_parts[0]}-{a_parts[2]}',
-                    f'{a_parts[1]}-{a_parts[3]}',
-                ],
-                f'{b_parts[0]}-{b_parts[1]}',
-            ]
-        else:
-            color_pattern = [
-                f'{a_parts[0]}-{a_parts[1]}',
-                f'{b_parts[0]}-{b_parts[1]}',
-            ]
+        right_parts = right_str.split('-')
+    c_bubble = parse_color_parts(left_parts)
+    c_letter = parse_color_parts(right_parts)
+    color_pattern = [c_bubble, c_letter]
     return color_pattern
 
 
@@ -6719,12 +6730,10 @@ def sort_bubble(cnt, ax, origin_x, origin_y):
 
 
 def get_new_grids(single_cnts_grids):
-    cxys = set()  # 使用集合来存储cxy值
+    cxys = set()
     new_grids = []
     for single_cnts_grid in single_cnts_grids:
-        # 使用列表推导式来构建新的grid，同时更新cxys集合
         new_grid = [single_cnt for single_cnt in single_cnts_grid if single_cnt.cxy not in cxys]
-        # 更新cxys集合
         cxys.update(single_cnt.cxy for single_cnt in new_grid)
         new_grids.append(new_grid)
     return new_grids
@@ -7823,7 +7832,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             if bubble_shape == '矩形' and global_rec_font_name:
                 font_name = global_rec_font_name
 
-            # 判断cp_bubble是否为列表类型，如果是，表示气泡是渐变色的
+            # 如果cp_bubble是列表，表示气泡是渐变色的
             if isinstance(cp_bubble, list):
                 b0 = cp_bubble[0].split('-')[0]
                 b1 = cp_bubble[1].split('-')[0]
@@ -7832,7 +7841,13 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
                 bubble_color_str = ''
             else:
                 bubble_color_str = cp_bubble.split('-')[0]
-            letter_color_str = cp_letter.split('-')[0]
+            # 如果cp_letter是列表，表示文字是双色的
+            if isinstance(cp_letter, list):
+                b0 = cp_letter[0].split('-')[0]
+                b1 = cp_letter[1].split('-')[0]
+                letter_color_str = f'{b0}-{b1}'
+            else:
+                letter_color_str = cp_letter.split('-')[0]
             bubble_meta_list = [
                 f'{raw_min_x},{raw_min_y},{br_w},{br_h}',
                 f'S{src_font_size}',
