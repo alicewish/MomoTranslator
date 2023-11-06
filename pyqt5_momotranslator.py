@@ -2436,8 +2436,10 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
         condition_a8 = br_w_ratio_min <= br_w_ratio <= br_w_ratio_max
         condition_a9 = br_h_ratio_min <= br_h_ratio <= br_h_ratio_max
         condition_a10 = br_ratio_min <= br_ratio <= br_ratio_max
-        condition_a11 = portion_ratio_min <= portion_ratio <= portion_ratio_max
-        condition_a12 = area_perimeter_ratio_min <= cnt.area_perimeter_ratio <= area_perimeter_ratio_max
+        condition_a11 = br_w_percent_min * iw <= cnt.br_x <= cnt.br_u <= br_w_percent_max * iw
+        condition_a12 = br_h_percent_min * ih <= cnt.br_y <= cnt.br_v <= br_h_percent_max * ih
+        condition_a13 = portion_ratio_min <= portion_ratio <= portion_ratio_max
+        condition_a14 = area_perimeter_ratio_min <= cnt.area_perimeter_ratio <= area_perimeter_ratio_max
 
         condition_as = [
             condition_a1,
@@ -2452,6 +2454,8 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             condition_a10,
             condition_a11,
             condition_a12,
+            condition_a13,
+            condition_a14,
         ]
 
         if all(condition_as):
@@ -2769,6 +2773,9 @@ class ColorGradient:
         # 记录颜色的扩展下限和上限
         logger.debug(f'{self.ext_lower=}, {self.ext_upper=}')
 
+    def put_padding(self, padding):
+        self.padding = padding
+
     def get_range_img(self, task_img):
         # 获取在颜色扩展范围内的图像
         frame_mask = inRange(task_img, array(self.ext_lower), array(self.ext_upper))
@@ -2809,6 +2816,9 @@ class ColorDouble:
         self.descript = '-'.join(self.descripts)
 
         self.padding = int(max(self.left_color.padding, self.right_color.padding))
+
+    def put_padding(self, padding):
+        self.padding = padding
 
     def get_range_img(self, video_img):
         left_color_mask = self.left_color.get_range_img(video_img)
@@ -5530,8 +5540,17 @@ def get_textblocks(letter_in_contour, media_type, f=None):
         if not is_inside_another:
             filter_textblocks.append(tb1)
     textblocks = filter_textblocks
+
+    # ================其他筛选================
     textblocks = [x for x in textblocks if textblock_letters_min <= x.letter_count <= textblock_letters_max]
-    # ================其他处理================
+    textblocks = [x for x in textblocks if br_w_percent_min * iw <= x.br_x <= x.br_u <= br_w_percent_max * iw]
+    textblocks = [x for x in textblocks if br_h_percent_min * ih <= x.br_y <= x.br_v <= br_h_percent_max * ih]
+    if f is None and not color_input:
+        # ================无框================
+        textblocks = [x for x in textblocks if textblock_area_min <= x.block_cnt.area <= textblock_area_max]
+        textblocks = [x for x in textblocks if textblock_wmin <= x.block_cnt.br_w <= textblock_wmax]
+        textblocks = [x for x in textblocks if textblock_hmin <= x.block_cnt.br_h <= textblock_hmax]
+    # ================其他排序================
     # if len(textblocks) == 3:
     #     textblocks.sort(key=lambda x: x.br_y)
     return textblocks
@@ -5945,9 +5964,6 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
             letter_mask = bitwise_and(letter_mask, CTD_mask)
 
         all_textblocks = get_textblocks(letter_mask, media_type)
-        all_textblocks = [x for x in all_textblocks if textblock_area_min <= x.block_cnt.area <= textblock_area_max]
-        all_textblocks = [x for x in all_textblocks if textblock_wmin <= x.block_cnt.br_w <= textblock_wmax]
-        all_textblocks = [x for x in all_textblocks if textblock_hmin <= x.block_cnt.br_h <= textblock_hmax]
         ordered_cnts = [x.expanded_cnt for x in all_textblocks]
 
         cp_raw_jpg = auto_subdir / f'{img_file.stem}-Raw-{color_letter.rgb_str}-{color_letter.color_name}.jpg'
@@ -9150,6 +9166,8 @@ if __name__ == "__main__":
     br_w_ratio_range = bubble_condition['br_w_ratio_range']
     br_h_ratio_range = bubble_condition['br_h_ratio_range']
     br_ratio_range = bubble_condition['br_ratio_range']
+    br_w_percent_range = bubble_condition['br_w_percent_range']
+    br_h_percent_range = bubble_condition['br_h_percent_range']
     portion_ratio_range = bubble_condition['portion_ratio_range']
     area_perimeter_ratio_range = bubble_condition['area_perimeter_ratio_range']
     bubble_px_range = bubble_condition['bubble_px_range']
@@ -9194,6 +9212,8 @@ if __name__ == "__main__":
     br_w_ratio_min, br_w_ratio_max = parse_range(br_w_ratio_range)
     br_h_ratio_min, br_h_ratio_max = parse_range(br_h_ratio_range)
     br_ratio_min, br_ratio_max = parse_range(br_ratio_range)
+    br_w_percent_min, br_w_percent_max = parse_range(br_w_percent_range)
+    br_h_percent_min, br_h_percent_max = parse_range(br_h_percent_range)
     portion_ratio_min, portion_ratio_max = parse_range(portion_ratio_range)
     area_perimeter_ratio_min, area_perimeter_ratio_max = parse_range(area_perimeter_ratio_range)
     bubble_px_min, bubble_px_max = parse_range(bubble_px_range)
