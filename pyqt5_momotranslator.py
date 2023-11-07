@@ -6,7 +6,7 @@ import re
 import string
 import sys
 import webbrowser
-from collections import Counter, OrderedDict
+from collections import Counter, OrderedDict, defaultdict
 from colorsys import hsv_to_rgb, rgb_to_hsv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
@@ -5373,7 +5373,7 @@ def get_textblocks(letter_in_contour, media_type, f=None):
         px_area = px_pts.shape[0]
         if letter_area_min <= px_area <= letter_area_max:
             letter_cnts.append(letter_cnt)
-    # logger.debug(f"{len(raw_letter_cnts)=}, {len(letter_contours)=}, {len(letter_cnts)=}")
+    logger.debug(f"{len(raw_letter_cnts)=}, {len(letter_contours)=}, {len(letter_cnts)=}")
 
     # ================单词================
     textwords = []

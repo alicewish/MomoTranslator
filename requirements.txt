@@ -2,6 +2,7 @@ applescript
 astor
 baidu_aip
 bs4
+chardet
 deep-translator
 easyocr
 jieba
@@ -10,9 +11,12 @@ loguru
 mammoth
 matplotlib
 natsort
+nltk
 numpy
 paddleocr
+paddlepaddle
 prettytable
+psd_tools
 psutil
 pypandoc
 pyperclip
