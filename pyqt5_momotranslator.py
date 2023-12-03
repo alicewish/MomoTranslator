@@ -13,7 +13,7 @@ from copy import deepcopy
 from csv import reader, writer
 from difflib import SequenceMatcher
 from filecmp import cmp
-from functools import wraps
+from functools import lru_cache, wraps
 from getpass import getuser
 from hashlib import md5
 from html import unescape
@@ -242,6 +242,7 @@ google_max_chars = 5000
 
 pictures_exclude = '加框,分框,框,涂白,填字,修图,-,copy,副本,拷贝,顺序,打码,测试,标注,边缘,标志,伪造'
 pic_tuple = tuple(pictures_exclude.split(','))
+scan_tuple = ('zSoU-Nerd',)
 
 spacing_ratio = 0.2
 
@@ -289,14 +290,16 @@ rgba_white = (255, 255, 255, 255)
 rgba_zero = (0, 0, 0, 0)
 rgba_black = (0, 0, 0, 255)
 
-outer_br_color = (255, 255, 0, 128)
-inner_br_color = (0, 255, 255, 128)
 index_color = (0, 0, 255, 255)
 
-mark_px = [0, 0, 0, 1]
+trans_red = (255, 0, 0, 128)  # 半透明红色
+trans_green = (0, 255, 0, 128)  # 半透明绿色
+trans_purple = (128, 0, 128, 168)  # 半透明紫色 
+trans_yellow = (255, 255, 0, 128)  # 半透明黄色
+trans_blue = (0, 255, 255, 128)  # 半透明蓝色
+trans_olive = (0, 128, 128, 128)  # 半透明橄榄色
 
-# 半透明紫色 (R, G, B, A)
-semi_transparent_purple = (128, 0, 128, 168)
+mark_px = [0, 0, 0, 1]
 
 # rec_pad = 20
 rec_pad = 10
@@ -713,13 +716,24 @@ def get_files(rootdir, file_type=None, direct=False):
     return file_paths
 
 
-# @logger.catch
-def desel_list(old_list, tup, method='stem'):
-    if method == 'name':
-        new_list = [x for x in old_list if not x.name.endswith(tup)]
-    else:
-        new_list = [x for x in old_list if not x.stem.endswith(tup)]
-    return new_list
+def filter_items(old_list, prefix=pic_tuple, infix=scan_tuple, suffix=(), item_attr='stem'):
+    """
+    根据前缀、中缀和后缀模式过滤列表项。
+
+    :param old_list: 原始列表。
+    :param prefix: 要排除的前缀元组。
+    :param infix: 要排除的中间文本元组。
+    :param suffix: 要排除的后缀元组。
+    :param method: 'name' 或 'stem'，基于文件全名或仅基于文件主名进行过滤。
+    :return: 过滤后的列表。
+    """
+
+    def is_excluded(item):
+        return any(item.startswith(p) for p in prefix) or \
+            any(p in item for p in infix) or \
+            any(item.endswith(s) for s in suffix)
+
+    return [item for item in old_list if not is_excluded(getattr(item, item_attr))]
 
 
 # @logger.catch
@@ -731,8 +745,8 @@ def get_valid_imgs(rootdir, mode='raw'):
     all_masks = [x for x in pngs if '-Mask-' in x.stem]
     no_masks = [x for x in pngs if '-Mask-' not in x.stem]
 
-    valid_jpgs = desel_list(jpgs, pic_tuple)
-    valid_pngs = desel_list(no_masks, pic_tuple)
+    valid_jpgs = filter_items(jpgs)
+    valid_pngs = filter_items(no_masks)
 
     valid_img_list = []
     if valid_jpgs:
@@ -745,6 +759,7 @@ def get_valid_imgs(rootdir, mode='raw'):
         return all_masks
 
 
+# @lru_cache
 def iload_data(file_path):
     data_dic = {}
     if file_path.exists():
@@ -793,14 +808,33 @@ def simplify_areas(areas):
     return ', '.join(simplified)
 
 
+def filter_within_bounds(data, key=lambda x: x):
+    """
+    过滤掉列表中指定比例的最高和最低值。
+
+    :param data: 列表数据。
+    :param key: 用于提取比较值的函数。
+    :param discard_ratio: 要丢弃的数据比例。
+    :return: 过滤后的列表。
+    """
+    if not data:
+        return []
+
+    # 根据提供的键函数排序
+    sorted_data = sorted(data, key=key)
+    discard_count = int(discard_ratio * len(sorted_data))
+
+    # 计算上下界
+    lower_bound = key(sorted_data[discard_count])
+    upper_bound = key(sorted_data[-discard_count - 1])
+
+    # 过滤数据
+    return [x for x in data if lower_bound - 1 <= key(x) <= upper_bound + 1]
+
+
 # @logger.catch
 def cal_words_data(raw_words_data):
-    heights = [x[2] for x in raw_words_data]
-    heights.sort()
-    discard_count = int(0.1 * len(heights))
-    lower_bound = heights[discard_count]
-    upper_bound = heights[-discard_count - 1]
-    words_data = [data for data in raw_words_data if lower_bound - 1 <= data[2] <= upper_bound + 1]
+    words_data = filter_within_bounds(raw_words_data, key=lambda x: x[2])
     logger.debug(f'{len(raw_words_data)=}, {len(words_data)=}')
 
     # 对words_data进行处理，把表示我的I替换成|
@@ -1256,20 +1290,20 @@ def convert_str2num(s):
 
 
 # @logger.catch
-def form2data(tess_zipped_data_form):
-    tess_zipped_data = []
-    for t in range(len(tess_zipped_data_form)):
-        row = tess_zipped_data_form[t]
+def form2data(ocr_zipped_data_form):
+    ocr_zipped_data = []
+    for t in range(len(ocr_zipped_data_form)):
+        row = ocr_zipped_data_form[t]
         if row and '|' in row:
             row_nums_str, par, row_text = row.partition('|')
             row_nums = row_nums_str.split(',')
             # 使用列表推导式将字符串转换为相应的整数或小数
             row_nums = [convert_str2num(x) for x in row_nums]
             tess_result = row_nums + [row_text]
-            tess_zipped_data.append(tess_result)
+            ocr_zipped_data.append(tess_result)
         else:
             logger.error(f'[{t}]{row=}')
-    return tess_zipped_data
+    return ocr_zipped_data
 
 
 def iread_csv(csv_file, pop_head=True, get_head=False):
@@ -2327,7 +2361,7 @@ def get_colorful_bubbles(image_raw, bubble_cnts):
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
         xy_pos = (bubble_cnt.cx - text_width // 2, bubble_cnt.cy - text_height // 2)
-        draw.text(xy_pos, text, font=msyh_font100, fill=semi_transparent_purple)
+        draw.text(xy_pos, text, font=msyh_font100, fill=trans_purple)
 
     # 将带有半透明颜色轮廓的透明图像与原图混合
     image_pil.paste(overlay, mask=overlay)
@@ -2387,7 +2421,7 @@ def get_textblock_bubbles(image_raw, all_textblocks):
 
             contour_pairs = zip(contour_points, contour_points[1:] + [contour_points[0]])
             for start_pt, end_point in contour_pairs:
-                draw.line([start_pt, end_point], fill=textblock_rgb, width=2)
+                draw.line([start_pt, end_point], fill=textblock_rgb, width=1)
             if len(textlines) == 1:
                 core_brp_coords = list(textblock.core_brp.exterior.coords)
                 all_core_brp_coords.append(core_brp_coords)
@@ -2524,7 +2558,8 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             if CTD_mask is not None:
                 mask_in_contour = bitwise_and(CTD_mask, filled_contour)
                 mask_px = np.sum(mask_in_contour >= 30)
-                mask_px_ratio = mask_px / cnt.area  # 文字像素占比
+                # 文字像素占比
+                mask_px_ratio = mask_px / cnt.area
 
             condition_b12 = True
             if left_sample is not None:
@@ -2580,6 +2615,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
     return filter_cnts
 
 
+@logger.catch
 def order2yaml(order_yml, ordered_cnts, custom_cnts, img_file):
     order_data = iload_data(order_yml)
     content0 = [cnt.cxy_str for cnt in ordered_cnts]
@@ -2872,6 +2908,7 @@ class Contr:
             self.cx, self.cy = 0, 0
         self.cxy = (self.cx, self.cy)
         self.cyx = (self.cy, self.cx)
+        self.cxy_pt = Point(self.cxy)
         self.cxy_str = f'{self.cx},{self.cy}'
         self.cyx_str = f'{self.cy},{self.cx}'
 
@@ -2945,8 +2982,8 @@ class TextWord:
         self.br_u = max(letter.br_x + letter.br_w for letter in self.letter_cnts)
         self.br_y = min(letter.br_y for letter in self.letter_cnts)
         self.br_v = max(letter.br_y + letter.br_h for letter in self.letter_cnts)
-        self.br_w = self.br_u - self.br_x + 1
-        self.br_h = self.br_v - self.br_y + 1
+        self.br_w = self.br_u - self.br_x
+        self.br_h = self.br_v - self.br_y
         self.br_m = int(self.br_x + 0.5 * self.br_w)
         self.br_n = int(self.br_y + 0.5 * self.br_h)
         self.br_center = (self.br_m, self.br_n)
@@ -3009,8 +3046,8 @@ class TextLine:
         self.br_u = max(word.br_x + word.br_w for word in self.textwords)
         self.br_y = min(word.br_y for word in self.textwords)
         self.br_v = max(word.br_y + word.br_h for word in self.textwords)
-        self.br_w = self.br_u - self.br_x + 1
-        self.br_h = self.br_v - self.br_y + 1
+        self.br_w = self.br_u - self.br_x
+        self.br_h = self.br_v - self.br_y
         # ================处理超大字号================
         if adapt_big_letter and self.br_h >= 2 * line_ext_px:
             self.line_ext_px = max(self.line_ext_px, int(0.8 * self.br_h))
@@ -3066,8 +3103,8 @@ class iTextBlock:
         self.br_u = max(textline.br_u for textline in self.textlines)
         self.br_y = min(textline.br_y for textline in self.textlines)
         self.br_v = max(textline.br_v for textline in self.textlines)
-        self.br_w = self.br_u - self.br_x + 1
-        self.br_h = self.br_v - self.br_y + 1
+        self.br_w = self.br_u - self.br_x
+        self.br_h = self.br_v - self.br_y
         self.br_m = int(self.br_x + 0.5 * self.br_w)
         self.br_n = int(self.br_y + 0.5 * self.br_h)
         self.br_center = (self.br_m, self.br_n)
@@ -3433,8 +3470,8 @@ class ContourPoly(QGraphicsPolygonItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setPen(QPen(self.swap_color, 5))
         self.setBrush(QBrush(self.swap_color, Qt.BrushStyle.SolidPattern))
-
-        self.centroid_dot = QGraphicsEllipseItem(self.cnt.cx - 5, self.cnt.cy - 5, 10, 10, parent=self)
+        self.centroid_dot = QGraphicsEllipseItem(self.cnt.cx - r_dot, self.cnt.cy - r_dot, 2 * r_dot, 2 * r_dot,
+                                                 parent=self)
         self.centroid_dot.setBrush(QBrush(QColor(0, 0, 255, 128)))
         self.line2prev = Line2Prev(parent=self)
         self.label_ord = LabelOrd(self.idx_label, parent=self)
@@ -4006,8 +4043,7 @@ class OrderWindow(QMainWindow):
         if self.img_file in self.cnts_dic:
             self.ordered_cnts = self.cnts_dic[self.img_file]
         else:
-            img_file, self.ordered_cnts = order1pic(self.img_file, self.frame_data, self.order_data, self.all_masks,
-                                                    media_type)
+            img_file, self.ordered_cnts = order1pic(self.img_folder, self.img_ind, media_type)
         self.custom_cnts = deepcopy(self.ordered_cnts)
         if self.custom_cnts:
             for idx, cnt in enumerate(self.custom_cnts):
@@ -4182,11 +4218,11 @@ class OrderWindow(QMainWindow):
         if self.order_mode == 'swap':
             order2yaml(self.order_yml, self.ordered_cnts, self.custom_cnts, self.img_file)
         elif self.order_mode == 'manual':
+            logger.debug(f'{self.manual_cnts=}')
             if len(self.manual_cnts) == len(self.custom_cnts):
-                self.manual_ordered_cnts = [self.custom_cnts[x] for x in self.manual_cnts]
-                order2yaml(self.order_yml, self.ordered_cnts, self.manual_ordered_cnts, self.img_file)
+                order2yaml(self.order_yml, self.ordered_cnts, self.manual_cnts, self.img_file)
             else:
-                self.status_bar.showMessage("在手动模式下，所有轮廓必须排序才能保存")
+                self.status_bar.showMessage("在手动模式下，必须排序所有轮廓才能保存")
 
 
 class MistWindow(QMainWindow):
@@ -5127,7 +5163,7 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
             color_name0 = get_color_name(dominant_color0)
             dominant_colors = [dominant_color0]
             imes = f"{img_file.stem}边框颜色中出现次数最多的颜色：{dominant_color0}, 颜色名称：{color_name0}, {color_ratio0=:.4f}"
-            if check_second_color and len(combined_color_and_ratios) >= 2:
+            if check_2nd_color and len(combined_color_and_ratios) >= 2:
                 # 第二种颜色较多且不为黑色
                 dominant_color1, color_ratio1 = combined_color_and_ratios[1]
                 color_name1 = get_color_name(dominant_color1)
@@ -5311,12 +5347,15 @@ def water_seg(filled_contour, textblocks):
 def get_textblocks(letter_in_contour, media_type, f=None):
     color_input = False
     # 确保图像是灰度的
-    if len(letter_in_contour.shape) == 3:  # 如果图像是彩色的
+    if len(letter_in_contour.shape) == 3:
+        # 如果图像是彩色的
         color_input = True
-        gray_letter_in_contour = cvtColor(letter_in_contour, COLOR_BGR2GRAY)  # 转换为灰度
+        # 转换为灰度
+        gray_letter_in_contour = cvtColor(letter_in_contour, COLOR_BGR2GRAY)
         # 二值化图像
         ret, letter_in_contour = threshold(gray_letter_in_contour, 127, 255, THRESH_BINARY)
-        letter_in_contour = bitwise_not(letter_in_contour)  # 反色
+        # 反色
+        letter_in_contour = bitwise_not(letter_in_contour)
 
     ih, iw = letter_in_contour.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
@@ -5543,8 +5582,10 @@ def get_textblocks(letter_in_contour, media_type, f=None):
 
     # ================其他筛选================
     textblocks = [x for x in textblocks if textblock_letters_min <= x.letter_count <= textblock_letters_max]
-    textblocks = [x for x in textblocks if br_w_percent_min * iw <= x.br_x <= x.br_u <= br_w_percent_max * iw]
-    textblocks = [x for x in textblocks if br_h_percent_min * ih <= x.br_y <= x.br_v <= br_h_percent_max * ih]
+    textblocks = [x for x in textblocks if
+                  textblock_w_percent_min * iw <= x.br_x <= x.br_u <= textblock_w_percent_max * iw]
+    textblocks = [x for x in textblocks if
+                  textblock_h_percent_min * ih <= x.br_y <= x.br_v <= textblock_h_percent_max * ih]
     if f is None and not color_input:
         # ================无框================
         textblocks = [x for x in textblocks if textblock_area_min <= x.block_cnt.area <= textblock_area_max]
@@ -5829,8 +5870,8 @@ def seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type):
                     if min_dist <= max_note_dist:
                         note_textblocks.append(textblock)
                         big_textblocks.remove(textblock)
-                if dists_dic:
-                    print()
+                # if dists_dic:
+                #     print()
             textblocks = big_textblocks
         else:
             textblocks = raw_textblocks
@@ -6209,12 +6250,13 @@ def get_single_cnts(image_raw, mask_pics):
                     center_y = (raw_min_y + raw_max_y) / 2
                     center_pt = (int(center_x), int(center_y))
 
-                    # 添加指定的padding
-                    min_x, max_x = raw_min_x - padding, raw_max_x + padding
-                    min_y, max_y = raw_min_y - padding, raw_max_y + padding
-                    # 限制padding后的坐标范围不超过原始图像的边界
-                    min_x, min_y = max(min_x, 0), max(min_y, 0)
-                    max_x, max_y = min(max_x, iw), min(max_y, ih)
+                    # 使用clip方法简化坐标计算
+                    min_x = clip(raw_min_x - padding, 0, iw)
+                    max_x = clip(raw_max_x + padding, 0, iw)
+                    min_y = clip(raw_min_y - padding, 0, ih)
+                    max_y = clip(raw_max_y + padding, 0, ih)
+
+                    # 创建包含所有坐标的元组
                     letter_coors = (raw_min_x, raw_min_y, raw_max_x, raw_max_y, min_x, min_y, max_x, max_y, center_pt)
 
                     if isinstance(cp_bubble, list):
@@ -6497,6 +6539,18 @@ def ocr_by_tesseract_simple(image, media_lang, vert=False):
     return text.strip()
 
 
+# 'level': 层次结构中的级别。1 表示页面级别，2 表示区域级别，3 表示段落级别，4 表示文本行级别，5 表示单词级别。
+# 'page_num': 页码。
+# 'block_num': 区域编号。
+# 'par_num': 段落编号。
+# 'line_num': 行号。
+# 'word_num': 单词编号。
+# 'left': 边界框左上角的 x 坐标。
+# 'top': 边界框左上角的 y 坐标。
+# 'width': 边界框的宽度。
+# 'height': 边界框的高度。
+# 'conf': 置信度，表示 Tesseract 识别结果的可信度，范围为 0 到 100。
+# 'text': 识别的文本。
 def ocr_by_tesseract(image, media_lang, vert=False):
     # 获取所选语言的配置
     language_config = tesseract_language_options[media_lang]
@@ -6520,8 +6574,7 @@ def ocr_by_tesseract(image, media_lang, vert=False):
         data['conf'],
         data['text']
     )
-    tess_zipped_data = list(tess_zipped_data)
-    return tess_zipped_data
+    return list(tess_zipped_data)
 
 
 # @logger.catch
@@ -6557,10 +6610,10 @@ def ocr_by_vision(image, media_lang):
             y_raw = bounding_box.origin.y
             w_raw = bounding_box.size.width
             h_raw = bounding_box.size.height
-            x = int(x_raw * width)
-            y = int(y_raw * height)
-            w = int(w_raw * width)
-            h = int(h_raw * height)
+            x = round(x_raw * width)
+            y = round(y_raw * height)
+            w = round(w_raw * width)
+            h = round(h_raw * height)
             # line_br = (x, y, w, h)
             tup = (x, y, w, h, confidence, text)
             text_results.append(tup)
@@ -6735,7 +6788,7 @@ def get_grouped_bulks(single_cnts_grid, thres=0):
 # @logger.catch
 def sort_bubble(cnt, ax, origin_x, origin_y):
     val = ax * (cnt.cx - origin_x) + (cnt.cy - origin_y)
-    if y_first:
+    if y_1st:
         if cnt.core_br_y - origin_y <= 60:
             val = 0.1 * ax * (cnt.cx - origin_x) + (cnt.cy - origin_y)
         elif cnt.core_br_y - origin_y <= 300:
@@ -6857,14 +6910,41 @@ def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media
     return single_cnts_grids
 
 
+@lru_cache
+def get_sd_img_folder(img_folder):
+    # ================获取漫画名================
+    series4file = img_folder.name
+    p_issue_w_dot = re.compile(r'(.+?)(?!\d) (\d{2,5})', I)
+    M_issue_w_dot = p_issue_w_dot.match(folder_name)
+    issue = None
+    if M_issue_w_dot:
+        series4file = M_issue_w_dot.group(1)
+        issue = M_issue_w_dot.group(2)
+
+    sd_folder_name = f'{series4file}-SD'
+    if issue:
+        sd_folder_name += f' {issue}'
+    sd_img_folder = img_folder.parent / sd_folder_name
+    return sd_img_folder
+
+
 # @logger.catch
-def order1pic(img_file, frame_data, order_data, all_masks, media_type):
-    logger.warning(f'{img_file=}')
-    img_folder = img_file.parent
+def order1pic(img_folder, i, media_type):
     auto_subdir = Auto / img_folder.name
+    img_list = get_valid_imgs(img_folder)
+    frame_yml = img_folder.parent / f'{img_folder.name}.yml'
+    order_yml = img_folder.parent / f'{img_folder.name}-气泡排序.yml'
+    frame_data = iload_data(frame_yml)
+    order_data = iload_data(order_yml)
+    # ================气泡蒙版================
+    all_masks = get_valid_imgs(img_folder, mode='mask')
+
+    img_file = img_list[i]
+    logger.warning(f'{img_file=}')
     order_preview_jpg = auto_subdir / f'{img_file.stem}-气泡排序.jpg'
     image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
     ih, iw = image_raw.shape[0:2]
+
     # ================矩形画格信息================
     # 从 frame_data 中获取画格信息，默认为整个图像的矩形区域
     frame_grid_strs = frame_data.get(img_file.name, [f'0,0,{iw},{ih}~0,0,{iw},{ih}'])
@@ -6872,6 +6952,20 @@ def order1pic(img_file, frame_data, order_data, all_masks, media_type):
     grid_masks, marked_frames = get_grid_masks(img_file, frame_grid_strs)
     # ================获取对应的文字图片================
     mask_pics = [x for x in all_masks if x.stem.startswith(img_file.stem)]
+
+    sd_img_folder = get_sd_img_folder(img_folder)
+    sd_bubble_order_strs = []
+    if sd_img_folder.exists():
+        sd_img_list = get_valid_imgs(sd_img_folder)
+        sd_order_yml = img_folder.parent / f'{sd_img_folder.name}-气泡排序.yml'
+        sd_order_data = iload_data(sd_order_yml)
+        sd_image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+        if i <= len(sd_img_list):
+            sd_img_file = sd_img_list[i]
+            sd_bubble_order_strs = sd_order_data.get(sd_img_file.name, [])
+            sd_image_raw = imdecode(fromfile(sd_img_file, dtype=uint8), -1)
+        sd_ih, sd_iw = sd_image_raw.shape[0:2]
+
     ordered_cnts = []
     if mask_pics:
         single_cnts = get_single_cnts(image_raw, mask_pics)
@@ -6880,6 +6974,40 @@ def order1pic(img_file, frame_data, order_data, all_masks, media_type):
         ordered_cnts = list(chain(*single_cnts_grids))
         order_preview = get_order_preview(marked_frames, single_cnts_grids)
         write_pic(order_preview_jpg, order_preview)
+        if not bubble_order_strs:
+            if sd_img_folder.exists() and len(sd_bubble_order_strs) == len(ordered_cnts):
+                # 把低清版图源的排序转换并录入到高清版图源
+                custom_cnts = []
+                for s in range(len(sd_bubble_order_strs)):
+                    sd_bubble_order_str = sd_bubble_order_strs[s]
+                    x, par, y = sd_bubble_order_str.partition(',')
+                    x = int(x)
+                    y = int(y)
+                    tar_x = x * iw / sd_iw
+                    tar_y = y * ih / sd_ih
+                    tar_x = int(tar_x)
+                    tar_y = int(tar_y)
+                    tar_xy = (tar_x, tar_y)
+                    # 找到ordered_cnts中cxy最靠近tar_xy的cnt
+                    tar_pt = Point(tar_xy)
+                    nearest_cnts = deepcopy(ordered_cnts)
+                    nearest_cnts.sort(key=lambda x: x.cxy_pt.distance(tar_pt))
+                    nearest_cnt = nearest_cnts[0]
+                    dist = nearest_cnt.cxy_pt.distance(tar_pt)
+                    logger.warning(f'[{dist}]{tar_pt=}, {nearest_cnt.cxy_pt=}')
+                    custom_cnts.append(nearest_cnt)
+
+                order_data = iload_data(order_yml)
+                content0 = [cnt.cxy_str for cnt in ordered_cnts]
+                content = [cnt.cxy_str for cnt in custom_cnts]
+                highlight_diffs(content0, content)
+                if content != content0:
+                    order_data[img_file.name] = content
+                    bubble_data_sorted = {k: order_data[k] for k in natsorted(order_data)}
+                    write_yml(order_yml, bubble_data_sorted)
+                    logger.debug(f"已保存到{order_yml}")
+            elif sd_bubble_order_strs:
+                logger.error(f'{sd_bubble_order_strs=}')
     return img_file, ordered_cnts
 
 
@@ -6906,7 +7034,7 @@ def get_order_preview(marked_frames, single_cnts_grids):
         bubble_draw.polygon(contour_points, fill=bubble_color_rgba)
         color_rgba = tuple(int(c * 255) for c in color) + (255,)
         # 绘制矩形
-        core_br_draw.rectangle([(x, y), (x + w, y + h)], outline=color_rgba, width=2)
+        core_br_draw.rectangle([(x, y), (x + w, y + h)], outline=color_rgba, width=1)
 
     for f in range(len(ordered_cnts)):
         bubble_cnt = ordered_cnts[f]
@@ -6916,7 +7044,7 @@ def get_order_preview(marked_frames, single_cnts_grids):
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
         xy_pos = (bubble_cnt.cx - text_width // 2, bubble_cnt.cy - text_height // 2)
-        bubble_draw.text(xy_pos, text, font=msyh_font100, fill=semi_transparent_purple)
+        bubble_draw.text(xy_pos, text, font=msyh_font100, fill=trans_purple)
 
     # ================按照画格内对话框顺序添加红色连线================
     for g in range(len(single_cnts_grids)):
@@ -6927,8 +7055,10 @@ def get_order_preview(marked_frames, single_cnts_grids):
             for b in range(len(single_cnts_grid)):
                 bubble_cnt = single_cnts_grid[b]
                 # 绿色圆圈表示质心
-                line_draw.ellipse([(bubble_cnt.cxy[0] - 10, bubble_cnt.cxy[1] - 10),
-                                   (bubble_cnt.cxy[0] + 10, bubble_cnt.cxy[1] + 10)], fill=(0, 255, 0, line_alpha))
+                r_pt = 10  # 锚点半径
+                anchor_pt = (bubble_cnt.cx - r_pt, bubble_cnt.cy - r_pt, bubble_cnt.cx + r_pt, bubble_cnt.cy + r_pt)
+                trans_green = (0, 255, 0, line_alpha)
+                line_draw.ellipse(anchor_pt, fill=trans_green)
                 # 如果不是该画格内的第一个气泡，与上一个气泡的质心画连线
                 if b > 0:
                     prev_cnt = single_cnts_grid[b - 1]
@@ -6955,24 +7085,18 @@ def get_order_preview(marked_frames, single_cnts_grids):
 # @logger.catch
 def step2_order(img_folder, media_type):
     img_list = get_valid_imgs(img_folder)
-    frame_yml = img_folder.parent / f'{img_folder.name}.yml'
-    order_yml = img_folder.parent / f'{img_folder.name}-气泡排序.yml'
     cnts_dic_pkl = img_folder.parent / f'{img_folder.name}.pkl'
-    frame_data = iload_data(frame_yml)
-    order_data = iload_data(order_yml)
     cnts_dic = iload_data(cnts_dic_pkl)
-    # ================气泡蒙版================
-    all_masks = get_valid_imgs(img_folder, mode='mask')
+
     if thread_method == 'queue':
         for i in range(len(img_list)):
-            img_file = img_list[i]
-            img_file, ordered_cnts = order1pic(img_file, frame_data, order_data, all_masks, media_type)
+            img_file, ordered_cnts = order1pic(img_folder, i, media_type)
             if ordered_cnts:
                 cnts_dic[img_file] = ordered_cnts
     else:
         with ThreadPoolExecutor(os.cpu_count()) as executor:
-            futures = [executor.submit(order1pic, img_file, frame_data, order_data, all_masks, media_type)
-                       for img_file in img_list]
+            futures = [executor.submit(order1pic, img_folder, i, media_type)
+                       for i in range(len(img_list))]
             for future in as_completed(futures):
                 try:
                     img_file, ordered_cnts = future.result()
@@ -7114,18 +7238,6 @@ def get_bubble_metadata(bubble_meta_str):
     return bubble_metadata
 
 
-# 'level': 层次结构中的级别。1 表示页面级别，2 表示区域级别，3 表示段落级别，4 表示文本行级别，5 表示单词级别。
-# 'page_num': 页码。
-# 'block_num': 区域编号。
-# 'par_num': 段落编号。
-# 'line_num': 行号。
-# 'word_num': 单词编号。
-# 'left': 边界框左上角的 x 坐标。
-# 'top': 边界框左上角的 y 坐标。
-# 'width': 边界框的宽度。
-# 'height': 边界框的高度。
-# 'conf': 置信度，表示 Tesseract 识别结果的可信度，范围为 0 到 100。
-# 'text': 识别的文本。
 def tesseract2meta(img_np, tess_zipped_data, ocr_para):
     # 从docx段落中提取带格式的单词
     ocr_lines = []
@@ -7209,6 +7321,7 @@ def tesseract2meta(img_np, tess_zipped_data, ocr_para):
 
 def get_ocr_data(ocr_engine, pic_ocr_data, img_np, media_lang, elements_num):
     if ocr_engine in pic_ocr_data:
+        # 已经识别过
         ocr_results = form2data(pic_ocr_data[ocr_engine])
     else:
         ocr_results = globals()[f'ocr_by_{ocr_engine.lower()}'](img_np, media_lang)
@@ -7296,7 +7409,7 @@ def better_text(input_text, ocr_type):
     # ================处理引号================
     for old, new in replacements.items():
         text_format = text_format.replace(old, new)
-    # ================处理0================
+    # ================多个0改成多个O================
     text_format = sub(r'0{3,}', lambda x: 'O' * len(x.group()), text_format)
     # ================处理有缩写符号的词================
     for old, new in better_abbrs.items():
@@ -7736,6 +7849,15 @@ def run2ansi(run):
         return text
 
 
+def get_dst_font_size(src_font_size):
+    if font_size_ratio_min <= src_font_size / global_font_size <= font_size_ratio_max:
+        dst_font_size = global_font_size
+    else:
+        dst_font_size = round(src_font_size * 1.2 / 5) * 5
+    dst_font_size = clip(dst_font_size, font_size_min, font_size_max)
+    return int(dst_font_size)
+
+
 # @logger.catch
 def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert):
     logger.warning(f'{img_file=}')
@@ -7768,9 +7890,18 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             cp_bubble, cp_letter = color_pattern
             pic_locate = f'{img_file.stem}, {c}, {img_md5}'
             pic_ocr_data = ocr_data.get(pic_locate, {})
-
+            rec_textblocks = get_textblocks(img_np, media_type)
+            textlines = []
+            textwords = []
+            if rec_textblocks:
+                rec_textblock = rec_textblocks[0]
+                textlines = rec_textblock.textlines
+                textwords = list(chain(*[x.textwords for x in textlines]))
             # ================对裁剪后的图像进行文字识别================
             tess_zipped_data, pic_ocr_data = get_ocr_data('tesseract', pic_ocr_data, img_np, media_lang, 1)
+            tess_zipped_data4 = [x for x in tess_zipped_data if x[0] == 4]
+            tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
+
             if 'Paddle' in custom_ocr_engines:
                 rec_results_paddle, pic_ocr_data = get_ocr_data('paddle', pic_ocr_data, img_np, media_lang, 2)
             if 'Easy' in custom_ocr_engines:
@@ -7830,13 +7961,36 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             raw_min_x, raw_min_y, raw_max_x, raw_max_y, min_x, min_y, max_x, max_y, center_pt = single_cnt.letter_coors
             br_w = raw_max_x - raw_min_x
             br_h = raw_max_y - raw_min_y
-            src_font_size = 30
-            dst_font_size = 30
-            if rec_results_vision:
-                line_h_mean = mean([x[3] for x in rec_results_vision])
-                src_font_size = int(line_h_mean)
-                dst_font_size = round(src_font_size * 1.05 / 5) * 5
+            src_font_size = int(0.8 * global_font_size)
+            dst_font_size = global_font_size
 
+            # 提取所有的h值
+            heights_tess_words = [x[-3] for x in tess_zipped_data5]
+            heights_tess_lines = [x[-3] for x in tess_zipped_data4]
+            heights_textwords = [x.br_h for x in textwords]
+            heights_textlines = [x.br_h for x in textlines]
+
+            heights_tess_words = filter_within_bounds(heights_tess_words)
+            heights_textwords = filter_within_bounds(heights_textwords)
+
+            heights = heights_tess_words + heights_tess_lines + heights_textwords + heights_textlines
+
+            if heights:
+                heights.sort()
+                if len(heights) >= 10:
+                    # 计算众数，如果没有众数，则取中位数
+                    modes = multimode(heights)
+                    if modes:
+                        # 众数存在，取众数
+                        src_font_size = modes[0]
+                    else:
+                        # 众数不存在，取中位数
+                        src_font_size = median(heights)
+                else:
+                    # 计算平均高度
+                    src_font_size = mean(heights)
+                src_font_size = int(src_font_size)
+                dst_font_size = get_dst_font_size(src_font_size)
             br_area_real = (single_cnt.br_w - 2) * (single_cnt.br_h - 2)
             fulfill_ratio = single_cnt.area / br_area_real
             bubble_shape = '未知'
@@ -7929,35 +8083,92 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     auto_subdir = Auto / img_folder.name
 
     # ================全白图像================
-    height, width = img_np.shape[:2]  # 获取原始图像的尺寸
-    white_img = ones((height, width, 3), dtype=uint8) * 255
+    image_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
+    white_img = ones((nh, nw, 3), dtype=uint8) * 255
     # ================文本================
     bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
+    tess_zipped_data4 = [x for x in tess_zipped_data if x[0] == 4]
+    tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
     vision_lines = vision_text_format.splitlines()
+
+    cp_bubble_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}.jpg'
+    cp_br_tess_line_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_line.jpg'
+    cp_br_tess_word_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_word.jpg'
+    cp_br_vision_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_vision.jpg'
+    cp_br_textword_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textword.jpg'
+    cp_br_textline_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textline.jpg'
+
+    write_pic(cp_bubble_jpg, img_np)
+
+    br_tess_word_image_pil = image_pil.convert("RGBA")
+    br_tess_word_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+    br_tess_word_draw = ImageDraw.Draw(br_tess_word_overlay)
+    for l in range(len(tess_zipped_data5)):
+        word_data = tess_zipped_data5[l]
+        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
+        br_tess_word_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
+    br_tess_word_image_pil.paste(br_tess_word_overlay, mask=br_tess_word_overlay)
+    write_pic(cp_br_tess_word_jpg, br_tess_word_image_pil)
+
+    br_tess_line_image_pil = image_pil.convert("RGBA")
+    br_tess_line_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+    br_tess_line_draw = ImageDraw.Draw(br_tess_line_overlay)
+    for l in range(len(tess_zipped_data4)):
+        word_data = tess_zipped_data4[l]
+        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
+        br_tess_line_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
+    br_tess_line_image_pil.paste(br_tess_line_overlay, mask=br_tess_line_overlay)
+    write_pic(cp_br_tess_line_jpg, br_tess_line_image_pil)
+
+    if rec_results_vision:
+        br_vision_image_pil = image_pil.convert("RGBA")
+        br_vision_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+        br_vision_draw = ImageDraw.Draw(br_vision_overlay)
+        for r in range(len(rec_results_vision)):
+            rec_result = rec_results_vision[r]
+            vx, vy, vw, vh, vconf, text_seg = rec_result
+            br_vision_draw.rectangle([(vx, nh - vy - vh), (vx + vw, nh - vy)], outline=trans_olive, width=1)
+        br_vision_image_pil.paste(br_vision_overlay, mask=br_vision_overlay)
+        write_pic(cp_br_vision_jpg, br_vision_image_pil)
+
+    # ================获取每一行图像================
+    rec_textblocks = get_textblocks(img_np, media_type)
+    textlines = []
+    textwords = []
+    if rec_textblocks:
+        rec_textblock = rec_textblocks[0]
+        textlines = rec_textblock.textlines
+        textwords = list(chain(*[x.textwords for x in textlines]))
+
+        br_textword_image_pil = image_pil.convert("RGBA")
+        br_textword_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+        br_textword_draw = ImageDraw.Draw(br_textword_overlay)
+        for t in range(len(textwords)):
+            textword = textwords[t]
+            br_textword_draw.rectangle([textword.left_top, textword.right_bottom], outline=trans_purple, width=1)
+        br_textword_image_pil.paste(br_textword_overlay, mask=br_textword_overlay)
+        write_pic(cp_br_textword_jpg, br_textword_image_pil)
+
+        br_textline_image_pil = image_pil.convert("RGBA")
+        br_textline_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+        br_textline_draw = ImageDraw.Draw(br_textline_overlay)
+        for t in range(len(textlines)):
+            textline = textlines[t]
+            br_textline_draw.rectangle([textline.left_top, textline.right_bottom], outline=trans_purple, width=1)
+        br_textline_image_pil.paste(br_textline_overlay, mask=br_textline_overlay)
+        write_pic(cp_br_textline_jpg, br_textline_image_pil)
+
+        textblock_bubbles = get_textblock_bubbles(img_np, rec_textblocks)
+        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{len(textlines)}].jpg'
+        write_pic(cp_textblock_jpg, textblock_bubbles)
+
     # ================获取气泡元数据================
     bubble_meta_list = bubble_meta_str.split('~')
     bubble_metadata = get_bubble_metadata(bubble_meta_str)
     bubble_color_str = bubble_metadata['bubble_color_str']
     letter_color_str = bubble_metadata['letter_color_str']
-    # ================获取每一行图像================
-    all_textblocks = get_textblocks(img_np, media_type)
-    lines_num = 0
-    if all_textblocks:
-        bubble_textblock = all_textblocks[0]
-        textlines = bubble_textblock.textlines
-        lines_num = len(bubble_textblock.textlines)
-        for t in range(len(textlines)):
-            textline = textlines[t]
-            br_x, br_y, br_w, br_h = textline.br
-            line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
-            line_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}.png'
-            write_pic(line_img_png, line_img)
-    else:
-        textlines = []
-    if do_dev_pic:
-        textblock_bubbles = get_textblock_bubbles(img_np, all_textblocks)
-        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{lines_num}].jpg'
-        write_pic(cp_textblock_jpg, textblock_bubbles)
+
     color_locate = f"{bubble_color_str}-{letter_color_str}"
     logger.warning(f'{color_locate=}')
     char_area_dict, word_actual_areas_dict = {}, {}
@@ -7991,17 +8202,16 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                 ent_line_infos = get_line_infos(tess_zipped_data_line, line_in_img)
                 new_line_infos.extend(ent_line_infos)
         line_infos = new_line_infos
-
-    # ================绘制每个单词的图像================
-    for l in range(len(line_infos)):
-        # 每一行
-        word_imgs = line_infos[l]
-        for w in range(len(word_imgs)):
-            # 每一词
-            pos_meta = word_imgs[w]
-            text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-            word_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_A{par_num}_L{l + 1}_W{word_num}.png'
-            write_pic(word_img_png, word_img)
+        # ================绘制每个单词的图像================
+        for l in range(len(line_infos)):
+            # 每一行
+            word_imgs = line_infos[l]
+            for w in range(len(word_imgs)):
+                # 每一词
+                pos_meta = word_imgs[w]
+                text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
+                word_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_A{par_num}_L{l + 1}_W{word_num}.png'
+                # write_pic(word_img_png, word_img)
 
     run_infos = []
     if len(vision_lines) == len(line_infos):
@@ -8139,6 +8349,8 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
         line_word, form = run_info
         if line_word not in [' ', lf]:
             logger.debug(f'[{line_word}]')
+        line_word = line_word.replace('|', 'I')
+        line_word = line_word.replace('—', '-')
         new_run = new_para.add_run(line_word)
         if 'b' in form:
             new_run.bold = True
@@ -8203,11 +8415,11 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
                 img_pil = fromarray(img_np)
                 all_cropped_imgs.append(img_pil)
                 # 获取图片的dpi，如果没有dpi信息，则使用默认值
-                image_dpi = img_pil.info.get('dpi', (default_dpi, default_dpi))[0]
+                img_dpi = img_pil.info.get('dpi', (default_dpi, default_dpi))[0]
+                pic_width_inches = img_pil.width / img_dpi
                 with BytesIO() as temp_buffer:
                     img_pil.save(temp_buffer, format=docx_img_format.upper())
                     temp_buffer.seek(0)
-                    pic_width_inches = img_pil.width / image_dpi
                     ocr_doc.add_picture(temp_buffer, width=Inches(pic_width_inches))
             elif result_type == 'paragraph':
                 ocr_doc = process_para(ocr_doc, img_folder, pic_result, cur_img_np, page_ind, bubble_ind)
@@ -8248,9 +8460,6 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
             long_img.paste(all_cropped_imgs[-1], ((max_width - all_cropped_imgs[-1].width) // 2, y_offset))
             long_img = add_pad2img(long_img, 20, color_white)
             write_pic(pic_text_png, long_img)
-            for p, cropped_img in enumerate(all_cropped_imgs):
-                img_path = auto_subdir / f"P{simple_stem}_B{p}.jpg"
-                write_pic(img_path, cropped_img)
     else:
         logger.error(f'{page_ind=}')
     return ocr_doc, all_cropped_imgs
@@ -8285,8 +8494,7 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
     if thread_method == 'queue':
         for i in range(len(img_list)):
             img_file = img_list[i]
-            pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type,
-                                  media_lang, vert)
+            pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
             all_pic_results.append(pic_results)
     else:
         with ThreadPoolExecutor(os.cpu_count()) as executor:
@@ -8658,7 +8866,7 @@ def get_QA(browser):
     # ================进行问答解析================
     simple_soup = BeautifulSoup(simple_chatgpt_text, 'html.parser')
     target_divs = []
-    class_ = "w-[calc(100%-50px)]"
+    class_ = "min-h-[20px]"
     divs = simple_soup.find_all('div', class_=class_)
     for div in divs:
         raw_div = deepcopy(div)
@@ -8970,10 +9178,24 @@ def folder_proc(img_folder, step_str, image_inds):
     lettering_txt = img_folder.parent / f'{img_folder.name}-6填字.txt'
     mark_txt = img_folder.parent / f'{img_folder.name}-7标记.txt'
     googletrans_txt = img_folder.parent / f'{img_folder.name}-9-api-谷歌翻译.txt'
-    img_list = get_valid_imgs(img_folder)
+
+    sd_img_folder = get_sd_img_folder(img_folder)
+    sd_src_docx = img_folder.parent / f'{sd_img_folder.name}-2校对.docx'
+
     auto_subdir = Auto / img_folder.name
     make_dir(auto_subdir)
     media_type = img_folder.parent.name.removesuffix('Process')
+
+    img_list = get_valid_imgs(img_folder)
+    img_stems = [x.stem for x in img_list]
+    cpre = common_prefix(img_stems)
+    csuf = common_suffix(img_stems)
+
+    sd_img_list = get_valid_imgs(sd_img_folder)
+    sd_img_stems = [x.stem for x in sd_img_list]
+    sd_cpre = common_prefix(sd_img_stems)
+    sd_csuf = common_suffix(sd_img_stems)
+
     if '0' in step_str:
         frame_data_sorted = step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, image_inds)
     if '1' in step_str:
@@ -8981,8 +9203,11 @@ def folder_proc(img_folder, step_str, image_inds):
     if '2' in step_str:
         step2_order(img_folder, media_type)
     if '3' in step_str:
-        ocr_doc = step3_OCR(img_folder, media_type, media_lang, vert)
-        write_docx(ocr_docx, ocr_doc)
+        if src_docx.exists() and sd_src_docx.exists() and merge_update:
+            merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems)
+        else:
+            ocr_doc = step3_OCR(img_folder, media_type, media_lang, vert)
+            write_docx(ocr_docx, ocr_doc)
     if '4' in step_str:
         step4_readable(img_folder)
     if '5' in step_str:
@@ -9000,6 +9225,7 @@ if __name__ == "__main__":
     MomoHanhua = DOCUMENTS / '默墨汉化'
     Auto = MomoHanhua / 'Auto'
     Log = MomoHanhua / 'Log'
+    DataOutput = MomoHanhua / 'DataOutput'
     ComicProcess = MomoHanhua / 'ComicProcess'
     MangaProcess = MomoHanhua / 'MangaProcess'
     ManhuaProcess = MomoHanhua / 'ManhuaProcess'
@@ -9014,6 +9240,7 @@ if __name__ == "__main__":
     make_dir(MomoHanhua)
     make_dir(Auto)
     make_dir(Log)
+    make_dir(DataOutput)
     make_dir(ComicProcess)
     make_dir(MangaProcess)
     make_dir(ManhuaProcess)
@@ -9090,6 +9317,22 @@ if __name__ == "__main__":
     docx_img_format = app_config.config_data['docx_img_format']
     folder_name = app_config.config_data['folder_name']
     area_folder_names = app_config.config_data['area_folder_names']
+    default_dpi = app_config.config_data['default_dpi']
+    WLB_ext_px = app_config.config_data['WLB_ext_px']
+    if ',' in str(WLB_ext_px):
+        ext_pxs = WLB_ext_px.split(',')
+        ext_pxs = [int(x) for x in ext_pxs]
+        word_ext_px, line_ext_px, block_ext_px = ext_pxs
+    else:
+        word_ext_px = line_ext_px = block_ext_px = int(WLB_ext_px)
+
+    lettering = app_config.config_data['lettering']
+    global_font_size = lettering['global_font_size']
+    global_font_name = lettering['global_font_name']
+    global_rec_font_name = lettering['global_rec_font_name']
+    global_spacing = lettering['global_spacing']
+    check_len = lettering['check_len']
+
     browser = app_config.config_data['browser']
     thumb_size = app_config.config_data['thumb_size']
     window_size = app_config.config_data['window_size']
@@ -9112,17 +9355,10 @@ if __name__ == "__main__":
     vert = False  # 设置为True以识别竖排文本
     if media_lang == 'Japanese':
         vert = True
-    default_dpi = app_config.config_data['default_dpi']
     thread_method = app_config.config_data['thread_method']
     pic_thread_method = app_config.config_data['pic_thread_method']
     if use_torch:
         pic_thread_method = 'queue'
-
-    lettering = app_config.config_data['lettering']
-    global_font_size = lettering['global_font_size']
-    global_font_name = lettering['global_font_name']
-    global_rec_font_name = lettering['global_rec_font_name']
-    global_spacing = lettering['global_spacing']
 
     font_dic = app_config.config_data['font_dic']
 
@@ -9150,9 +9386,9 @@ if __name__ == "__main__":
     gaps = frame_settings['gaps']
     if isinstance(gaps, int):
         gaps = [gaps] * 4
-    check_second_color = frame_settings['check_second_color']
+    check_2nd_color = frame_settings['check_2nd_color']
     check_more_frame_color = frame_settings['check_more_frame_color']
-    y_first = frame_settings['y_first']
+    y_1st = frame_settings['y_1st']
     fully_framed = frame_settings['fully_framed']
 
     bubble_condition = app_config.config_data['bubble_condition']
@@ -9163,24 +9399,26 @@ if __name__ == "__main__":
     br_h_range = bubble_condition['br_h_range']
     br_wh_range = bubble_condition['br_wh_range']
     br_wnh_range = bubble_condition['br_wnh_range']
-    br_w_ratio_range = bubble_condition['br_w_ratio_range']
-    br_h_ratio_range = bubble_condition['br_h_ratio_range']
-    br_ratio_range = bubble_condition['br_ratio_range']
+    br_w_rarange = bubble_condition['br_w_rarange']
+    br_h_rarange = bubble_condition['br_h_rarange']
+    br_rarange = bubble_condition['br_rarange']
     br_w_percent_range = bubble_condition['br_w_percent_range']
     br_h_percent_range = bubble_condition['br_h_percent_range']
-    portion_ratio_range = bubble_condition['portion_ratio_range']
-    area_perimeter_ratio_range = bubble_condition['area_perimeter_ratio_range']
+    portion_rarange = bubble_condition['portion_rarange']
+    area_perimeter_rarange = bubble_condition['area_perimeter_rarange']
     bubble_px_range = bubble_condition['bubble_px_range']
     letter_px_range = bubble_condition['letter_px_range']
-    bubble_px_ratio_range = bubble_condition['bubble_px_ratio_range']
-    letter_px_ratio_range = bubble_condition['letter_px_ratio_range']
-    BnL_px_ratio_range = bubble_condition['BnL_px_ratio_range']
-    mask_px_ratio_range = bubble_condition['mask_px_ratio_range']
+    bubble_px_rarange = bubble_condition['bubble_px_rarange']
+    letter_px_rarange = bubble_condition['letter_px_rarange']
+    BnL_px_rarange = bubble_condition['BnL_px_rarange']
+    mask_px_rarange = bubble_condition['mask_px_rarange']
     edge_px_count_range = bubble_condition['edge_px_count_range']
     letter_area_range = bubble_condition['letter_area_range']
     textblock_area_range = bubble_condition['textblock_area_range']
     textblock_wrange = bubble_condition['textblock_wrange']
     textblock_hrange = bubble_condition['textblock_hrange']
+    textblock_w_percent_range = bubble_condition['textblock_w_percent_range']
+    textblock_h_percent_range = bubble_condition['textblock_h_percent_range']
     letter_cnts_range = bubble_condition['letter_cnts_range']
     textblock_letters_range = bubble_condition['textblock_letters_range']
     note_area_range = bubble_condition['note_area_range']
@@ -9209,24 +9447,26 @@ if __name__ == "__main__":
     br_h_min, br_h_max = parse_range(br_h_range)
     br_wh_min, br_wh_max = parse_range(br_wh_range)
     br_wnh_min, br_wnh_max = parse_range(br_wnh_range)
-    br_w_ratio_min, br_w_ratio_max = parse_range(br_w_ratio_range)
-    br_h_ratio_min, br_h_ratio_max = parse_range(br_h_ratio_range)
-    br_ratio_min, br_ratio_max = parse_range(br_ratio_range)
+    br_w_ratio_min, br_w_ratio_max = parse_range(br_w_rarange)
+    br_h_ratio_min, br_h_ratio_max = parse_range(br_h_rarange)
+    br_ratio_min, br_ratio_max = parse_range(br_rarange)
     br_w_percent_min, br_w_percent_max = parse_range(br_w_percent_range)
     br_h_percent_min, br_h_percent_max = parse_range(br_h_percent_range)
-    portion_ratio_min, portion_ratio_max = parse_range(portion_ratio_range)
-    area_perimeter_ratio_min, area_perimeter_ratio_max = parse_range(area_perimeter_ratio_range)
+    portion_ratio_min, portion_ratio_max = parse_range(portion_rarange)
+    area_perimeter_ratio_min, area_perimeter_ratio_max = parse_range(area_perimeter_rarange)
     bubble_px_min, bubble_px_max = parse_range(bubble_px_range)
     letter_px_min, letter_px_max = parse_range(letter_px_range)
-    bubble_px_ratio_min, bubble_px_ratio_max = parse_range(bubble_px_ratio_range)
-    letter_px_ratio_min, letter_px_ratio_max = parse_range(letter_px_ratio_range)
-    BnL_px_ratio_min, BnL_px_ratio_max = parse_range(BnL_px_ratio_range)
-    mask_px_ratio_min, mask_px_ratio_max = parse_range(mask_px_ratio_range)
+    bubble_px_ratio_min, bubble_px_ratio_max = parse_range(bubble_px_rarange)
+    letter_px_ratio_min, letter_px_ratio_max = parse_range(letter_px_rarange)
+    BnL_px_ratio_min, BnL_px_ratio_max = parse_range(BnL_px_rarange)
+    mask_px_ratio_min, mask_px_ratio_max = parse_range(mask_px_rarange)
     edge_px_count_min, edge_px_count_max = parse_range(edge_px_count_range)
     letter_area_min, letter_area_max = parse_range(letter_area_range)
     textblock_area_min, textblock_area_max = parse_range(textblock_area_range)
     textblock_wmin, textblock_wmax = parse_range(textblock_wrange)
     textblock_hmin, textblock_hmax = parse_range(textblock_hrange)
+    textblock_w_percent_min, textblock_w_percent_max = parse_range(textblock_w_percent_range)
+    textblock_h_percent_min, textblock_h_percent_max = parse_range(textblock_h_percent_range)
     letter_cnts_min, letter_cnts_max = parse_range(letter_cnts_range)
     textblock_letters_min, textblock_letters_max = parse_range(textblock_letters_range)
     note_area_min, note_area_max = parse_range(note_area_range)
@@ -9246,13 +9486,6 @@ if __name__ == "__main__":
     brh_min, brh_max = parse_range(brh_range)
 
     bubble_recognize = app_config.config_data['bubble_recognize']
-    WLB_ext_px = bubble_recognize['WLB_ext_px']
-    if ',' in str(WLB_ext_px):
-        ext_pxs = WLB_ext_px.split(',')
-        ext_pxs = [int(x) for x in ext_pxs]
-        word_ext_px, line_ext_px, block_ext_px = ext_pxs
-    else:
-        word_ext_px = line_ext_px = block_ext_px = int(WLB_ext_px)
     max_height_diff = bubble_recognize['max_height_diff']
     max_font_size = bubble_recognize['max_font_size']
     kernel_depth = bubble_recognize['kernel_depth']
@@ -9267,6 +9500,7 @@ if __name__ == "__main__":
     else:
         textword_alpha = textline_alpha = textblock_alpha = int(WLB_alpha) / 100
     padding = bubble_recognize['padding']
+    r_dot = bubble_recognize['r_dot']
 
     bubble_seg = app_config.config_data['bubble_seg']
     all_caps = bubble_seg['all_caps']
@@ -9277,13 +9511,19 @@ if __name__ == "__main__":
     use_pivot_split = bubble_seg['use_pivot_split']
 
     ocr_settings = app_config.config_data['ocr_settings']
+    discard_ratio = ocr_settings['discard_ratio']
     bold_thres = ocr_settings['bold_thres']
     y_thres = ocr_settings['y_thres']
     bit_thres = ocr_settings['bit_thres']
+    font_size_range = ocr_settings['font_size_range']
+    font_size_min, font_size_max = parse_range(font_size_range)
+    font_size_rarange = ocr_settings['font_size_rarange']
+    font_size_ratio_min, font_size_ratio_max = parse_range(font_size_rarange)
     print_tables = ocr_settings['print_tables']
     init_ocr = ocr_settings['init_ocr']
     use_textwords = ocr_settings['use_textwords']
     stitch_spacing = ocr_settings['stitch_spacing']
+    merge_update = ocr_settings['merge_update']
 
     baidu_ocr = app_config.config_data['baidu_ocr']
     obd_app_id = baidu_ocr['APP_ID']
@@ -9394,7 +9634,9 @@ if __name__ == "__main__":
         logger.debug(f'{folder_name=}')
         logger.info(f'{step_str=}')
         image_inds = [
-            # 7,
+            # 12,
+            # 14,
+            # 16,
         ]
         folder_proc(img_folder, step_str, image_inds)
     elif do_dev_pic:
