@@ -718,7 +718,7 @@ def get_files(rootdir, file_type=None, direct=False):
     return file_paths
 
 
-def filter_items(old_list, prefix=pic_tuple, infix=scan_tuple, suffix=(), item_attr='stem'):
+def filter_items(old_list, prefix=(), infix=scan_tuple, suffix=pic_tuple, item_attr='stem'):
     """
     根据前缀、中缀和后缀模式过滤列表项。
 
@@ -738,7 +738,7 @@ def filter_items(old_list, prefix=pic_tuple, infix=scan_tuple, suffix=(), item_a
     return [item for item in old_list if not is_excluded(getattr(item, item_attr))]
 
 
-# @logger.catch
+@logger.catch
 def get_valid_imgs(rootdir, vmode='raw'):
     all_pics = get_files(rootdir, 'pic', True)
     jpgs = [x for x in all_pics if x.suffix in ('.jpg', '.jpeg')]
@@ -756,9 +756,10 @@ def get_valid_imgs(rootdir, vmode='raw'):
     elif valid_pngs:
         valid_img_list = valid_pngs
     if vmode == 'raw':
-        return valid_img_list
+        valid_imgs = valid_img_list
     else:
-        return all_masks
+        valid_imgs = all_masks
+    return valid_imgs
 
 
 # @lru_cache
