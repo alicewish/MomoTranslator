@@ -1,3 +1,4 @@
+from unicodedata import normalize
 import codecs
 import os
 import os.path
@@ -28,6 +29,7 @@ from platform import machine, processor, system, uname
 from pprint import pprint
 from re import I, IGNORECASE, Pattern, escape, findall, finditer, match, search, sub
 from shutil import copy2
+from statistics import median, multimode
 from subprocess import PIPE, Popen, call
 from time import sleep, strftime, time
 from traceback import print_exc
@@ -8463,6 +8465,59 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
     else:
         logger.error(f'{page_ind=}')
     return ocr_doc, all_cropped_imgs
+
+
+def merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems):
+    ocr_doc = Document(src_docx)
+    sd_ocr_doc = Document(sd_src_docx)
+    ocr_full_paragraphs = [para.text for para in ocr_doc.paragraphs]
+    ocr_docx_index_dict, ocr_docx_inds = create_index_dict(img_stems, ocr_full_paragraphs)
+    sd_ocr_full_paragraphs = [para.text for para in sd_ocr_doc.paragraphs]
+    sd_ocr_docx_index_dict, sd_ocr_docx_inds = create_index_dict(sd_img_stems, sd_ocr_full_paragraphs)
+
+    for i in range(len(ocr_full_paragraphs)):
+        hd_para = ocr_doc.paragraphs[i]
+        sd_para = sd_ocr_doc.paragraphs[i]
+        if 'Horizontal' in hd_para.text:
+            print(hd_para.text)
+            new_run = hd_para.add_run(lf)
+            for sd_run in sd_para.runs:
+                new_run = hd_para.add_run(sd_run.text)
+                new_run.font.bold = sd_run.font.bold
+                new_run.font.italic = sd_run.font.italic
+                new_run.font.underline = sd_run.font.underline
+                new_run.font.strike = sd_run.font.strike
+                new_run.font.name = sd_run.font.name
+                new_run.font.size = sd_run.font.size
+                new_run.font.color.rgb = sd_run.font.color.rgb
+
+        if 'Horizontal' in hd_para.text:
+            print(hd_para.text)
+            bubble_meta_str = hd_para.text.splitlines()[0]
+            hd_para.clear()
+            # ================气泡数据================
+            new_run = hd_para.add_run(bubble_meta_str)
+            new_run = hd_para.add_run(lf)  # 软换行
+
+            for r in range(len(sd_para.runs)):
+                sd_run = sd_para.runs[r]
+                if r == 0:
+                    text_to_add = '\n'.join(sd_run.text.splitlines[1:])
+                else:
+                    text_to_add = sd_run.text
+
+                if text_to_add:
+                    new_run = hd_para.add_run(text_to_add)
+                    new_run.font.bold = sd_run.font.bold
+                    new_run.font.italic = sd_run.font.italic
+                    new_run.font.underline = sd_run.font.underline
+                    new_run.font.strike = sd_run.font.strike
+                    new_run.font.name = sd_run.font.name
+                    new_run.font.size = sd_run.font.size
+                    new_run.font.color.rgb = sd_run.font.color.rgb
+
+    ocr_doc.save('updated_document.docx')
+    return
 
 
 @timer_decorator
