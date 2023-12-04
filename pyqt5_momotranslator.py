@@ -1,4 +1,3 @@
-from unicodedata import normalize
 import codecs
 import os
 import os.path
@@ -34,6 +33,7 @@ from subprocess import PIPE, Popen, call
 from time import sleep, strftime, time
 from traceback import print_exc
 from typing import Union
+from unicodedata import normalize
 from uuid import getnode, uuid4
 from warnings import filterwarnings
 
@@ -739,7 +739,7 @@ def filter_items(old_list, prefix=pic_tuple, infix=scan_tuple, suffix=(), item_a
 
 
 # @logger.catch
-def get_valid_imgs(rootdir, mode='raw'):
+def get_valid_imgs(rootdir, vmode='raw'):
     all_pics = get_files(rootdir, 'pic', True)
     jpgs = [x for x in all_pics if x.suffix in ('.jpg', '.jpeg')]
     pngs = [x for x in all_pics if x.suffix == '.png']
@@ -755,7 +755,7 @@ def get_valid_imgs(rootdir, mode='raw'):
         valid_img_list = valid_jpgs
     elif valid_pngs:
         valid_img_list = valid_pngs
-    if mode == 'raw':
+    if vmode == 'raw':
         return valid_img_list
     else:
         return all_masks
@@ -3774,18 +3774,18 @@ class CustGraphicsView(QGraphicsView):
     def cust_zoom_out(self):
         self.cust_zoom(0.8)
 
-    def fit2view(self, mode):
+    def fit2view(self, fmode):
         rect = self.scene().itemsBoundingRect()
         view_rect = self.viewport().rect()
         scale_factor_x = view_rect.width() / rect.width()
         scale_factor_y = view_rect.height() / rect.height()
-        if mode == 'width':
+        if fmode == 'width':
             scale_factor = scale_factor_x
-        elif mode == 'height':
+        elif fmode == 'height':
             scale_factor = scale_factor_y
-        elif mode == 'screen':
+        elif fmode == 'screen':
             scale_factor = min(scale_factor_x, scale_factor_y)
-        elif mode == 'original':
+        elif fmode == 'original':
             scale_factor = scaling_factor_reci
         self.zoom_level = scale_factor
         self.resetTransform()
@@ -3849,7 +3849,7 @@ class OrderWindow(QMainWindow):
         self.order_yml = self.img_folder.parent / f'{self.img_folder.name}-气泡排序.yml'
         self.cnts_dic_pkl = self.img_folder.parent / f'{self.img_folder.name}.pkl'
         self.img_list = get_valid_imgs(self.img_folder)
-        self.all_masks = get_valid_imgs(self.img_folder, mode='mask')
+        self.all_masks = get_valid_imgs(self.img_folder, vmode='mask')
         self.frame_data = iload_data(self.frame_yml)
         self.order_data = iload_data(self.order_yml)
         self.cnts_dic = iload_data(self.cnts_dic_pkl)
@@ -3954,7 +3954,7 @@ class OrderWindow(QMainWindow):
         self.display_mode_group = QActionGroup(self)
         for display_mode in self.display_modes:
             action = QAction(display_mode[0], self, checkable=True)
-            action.triggered.connect(lambda _, mode=display_mode[1]: self.cil.set_display_mode(mode))
+            action.triggered.connect(lambda _, dmode=display_mode[1]: self.cil.set_display_mode(dmode))
             self.view_menu.addAction(action)
             self.display_mode_group.addAction(action)
 
@@ -4071,7 +4071,7 @@ class OrderWindow(QMainWindow):
                 self.order_yml = self.img_folder.parent / f'{self.img_folder.name}-气泡排序.yml'
                 self.cnts_dic_pkl = self.img_folder.parent / f'{self.img_folder.name}.pkl'
                 self.img_list = img_list
-                self.all_masks = get_valid_imgs(self.img_folder, mode='mask')
+                self.all_masks = get_valid_imgs(self.img_folder, vmode='mask')
                 self.frame_data = iload_data(self.frame_yml)
                 self.order_data = iload_data(self.order_yml)
                 self.cnts_dic = iload_data(self.cnts_dic_pkl)
@@ -4140,8 +4140,8 @@ class OrderWindow(QMainWindow):
         scale_factor = target_scale / current_scale
         self.cgv.scale(scale_factor, scale_factor)
 
-    def set_order_mode(self, mode):
-        self.order_mode = mode
+    def set_order_mode(self, order_mode):
+        self.order_mode = order_mode
         self.update_contourpolys()
 
     def swap_contours(self, poly_idx1, poly_idx2):
@@ -4509,7 +4509,7 @@ class MistWindow(QMainWindow):
         self.display_mode_group = QActionGroup(self)
         for display_mode in self.display_modes:
             action = QAction(display_mode[0], self, checkable=True)
-            action.triggered.connect(lambda _, mode=display_mode[1]: self.cil.set_display_mode(mode))
+            action.triggered.connect(lambda _, dmode=display_mode[1]: self.cil.set_display_mode(dmode))
             self.view_menu.addAction(action)
             self.display_mode_group.addAction(action)
 
@@ -4782,7 +4782,7 @@ class MistWindow(QMainWindow):
     def step1_analyze_bubbles(self):
         frame_data = iload_data(self.frame_yml)
         processed_imgs = 0
-        all_masks_old = get_valid_imgs(self.img_folder, mode='mask')
+        all_masks_old = get_valid_imgs(self.img_folder, vmode='mask')
 
         for p, img_file in enumerate(self.img_list):
             logger.warning(f'{img_file=}')
@@ -4812,7 +4812,7 @@ class MistWindow(QMainWindow):
             QApplication.processEvents()
 
         # ================搬运气泡蒙版================
-        auto_all_masks = get_valid_imgs(self.auto_subdir, mode='mask')
+        auto_all_masks = get_valid_imgs(self.auto_subdir, vmode='mask')
         # 如果步骤开始前没有气泡蒙版
         if not all_masks_old:
             for mask_src in auto_all_masks:
@@ -4828,7 +4828,7 @@ class MistWindow(QMainWindow):
     def step2_order(self):
         frame_data = iload_data(self.frame_yml)
         order_data = iload_data(self.order_yml)
-        all_masks = get_valid_imgs(self.img_folder, mode='mask')
+        all_masks = get_valid_imgs(self.img_folder, vmode='mask')
         processed_imgs = 0
 
         for p, img_file in enumerate(self.img_list):
@@ -4869,7 +4869,7 @@ class MistWindow(QMainWindow):
         # ================分析画格================
         processed_imgs = 0
         # ================气泡蒙版================
-        all_masks = get_valid_imgs(self.img_folder, mode='mask')
+        all_masks = get_valid_imgs(self.img_folder, vmode='mask')
         ocr_doc = Document()
         for i in range(len(self.img_list)):
             img_file = self.img_list[i]
@@ -6134,7 +6134,7 @@ def step1_analyze_bubbles(img_folder, media_type, auto_subdir):
     img_list = get_valid_imgs(img_folder)
     frame_yml = img_folder.parent / f'{img_folder.name}.yml'
     frame_data = iload_data(frame_yml)
-    all_masks_old = get_valid_imgs(img_folder, mode='mask')
+    all_masks_old = get_valid_imgs(img_folder, vmode='mask')
 
     if pic_thread_method == 'queue':
         for p, img_file in enumerate(img_list):
@@ -6146,7 +6146,7 @@ def step1_analyze_bubbles(img_folder, media_type, auto_subdir):
                 img_file in img_list]
 
     # ================搬运气泡蒙版================
-    auto_all_masks = get_valid_imgs(auto_subdir, mode='mask')
+    auto_all_masks = get_valid_imgs(auto_subdir, vmode='mask')
     # 如果步骤开始前没有气泡蒙版
     if not all_masks_old:
         for mask_src in auto_all_masks:
@@ -6939,7 +6939,7 @@ def order1pic(img_folder, i, media_type):
     frame_data = iload_data(frame_yml)
     order_data = iload_data(order_yml)
     # ================气泡蒙版================
-    all_masks = get_valid_imgs(img_folder, mode='mask')
+    all_masks = get_valid_imgs(img_folder, vmode='mask')
 
     img_file = img_list[i]
     logger.warning(f'{img_file=}')
@@ -8543,7 +8543,7 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
     order_data = iload_data(order_yml)
     ocr_data = iload_data(ocr_yml)
     # ================气泡蒙版================
-    all_masks = get_valid_imgs(img_folder, mode='mask')
+    all_masks = get_valid_imgs(img_folder, vmode='mask')
 
     all_pic_results = []
     if thread_method == 'queue':
@@ -9606,8 +9606,8 @@ if __name__ == "__main__":
     msyh_font60 = ImageFont.truetype(msyh_font_ttc, 60)
     msyh_font100 = ImageFont.truetype(msyh_font_ttc, 100)
 
-    for mode in mode_list:
-        globals()[mode] = (do_mode == mode)
+    for dmode in mode_list:
+        globals()[dmode] = (do_mode == dmode)
 
     img_folder = ComicProcess / folder_name
     # img_folder = MangaProcess / folder_name
@@ -9619,7 +9619,7 @@ if __name__ == "__main__":
     img_stems = [x.stem for x in img_list]
     cpre = common_prefix(img_stems)
     csuf = common_suffix(img_stems)
-    all_masks = get_valid_imgs(img_folder, mode='mask')
+    all_masks = get_valid_imgs(img_folder, vmode='mask')
 
     # ================获取漫画名================
     series4file = folder_name
