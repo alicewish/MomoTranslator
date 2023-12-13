@@ -244,7 +244,10 @@ google_max_chars = 5000
 
 pictures_exclude = '加框,分框,框,涂白,填字,修图,-,copy,副本,拷贝,顺序,打码,测试,标注,边缘,标志,伪造'
 pic_tuple = tuple(pictures_exclude.split(','))
-scan_tuple = ('zSoU-Nerd',)
+scan_tuple = (
+    'zSoU-Nerd',
+    'zWater',
+)
 
 spacing_ratio = 0.2
 
@@ -726,7 +729,7 @@ def filter_items(old_list, prefix=(), infix=scan_tuple, suffix=pic_tuple, item_a
     :param prefix: 要排除的前缀元组。
     :param infix: 要排除的中间文本元组。
     :param suffix: 要排除的后缀元组。
-    :param method: 'name' 或 'stem'，基于文件全名或仅基于文件主名进行过滤。
+    :param item_attr: 'name' 或 'stem'，基于文件全名或仅基于文件主名进行过滤。
     :return: 过滤后的列表。
     """
 
@@ -811,7 +814,7 @@ def simplify_areas(areas):
     return ', '.join(simplified)
 
 
-def filter_within_bounds(data, key=lambda x: x):
+def filter_w_bounds(data, key=lambda x: x):
     """
     过滤掉列表中指定比例的最高和最低值。
 
@@ -835,9 +838,9 @@ def filter_within_bounds(data, key=lambda x: x):
     return [x for x in data if lower_bound - 1 <= key(x) <= upper_bound + 1]
 
 
-# @logger.catch
+@logger.catch
 def cal_words_data(raw_words_data):
-    words_data = filter_within_bounds(raw_words_data, key=lambda x: x[2])
+    words_data = filter_w_bounds(raw_words_data, key=lambda x: x[2])
     logger.debug(f'{len(raw_words_data)=}, {len(words_data)=}')
 
     # 对words_data进行处理，把表示我的I替换成|
@@ -873,12 +876,25 @@ def cal_words_data(raw_words_data):
         b[i] = area
         weights[i] = len(word)
 
-    # 使用加权最小二乘法解方程组
     W = np.diag(np.sqrt(weights))
-    x, residuals, rank, s = np.linalg.lstsq(W @ A, W @ b, rcond=None)
-
-    # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
-    char_to_area = {char: x[char_to_index[char]] for char in formatted_chars}
+    WA = W @ A
+    Wb = W @ b
+    logger.warning(f'{cal_method=}')
+    if cal_method == '加权最小二乘法':
+        # 使用加权最小二乘法解方程组
+        x, residuals, rank, s = np.linalg.lstsq(WA, Wb, rcond=None)
+        # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
+    elif cal_method == '非负最小二乘法':
+        # 使用非负最小二乘法解方程组
+        x, residuals = nnls(WA, Wb)
+        # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
+    else:
+        # 加权非负最小二乘法
+        # 设置非负约束
+        bounds = (min_char_area, np.inf)
+        result = lsq_linear(WA, Wb, bounds=bounds)
+        x = result.x
+    char_to_area = {char: max(min_char_area, x[char_to_index[char]]) for char in formatted_chars}
 
     # 输出结果
     char_table = PrettyTable()
@@ -5422,7 +5438,7 @@ def get_textblocks(letter_in_contour, media_type, f=None):
     letter_cnts4words = deepcopy(letter_cnts)
     # 从左到右，然后从上到下
     letter_cnts4words.sort(key=lambda x: (x.br_x, x.br_y))
-    if all_caps:
+    if use_dilate:
         word_in_contour = dilate(letter_in_contour, kernal_word, iterations=1)
         word_contours, word_hierarchy = findContours(word_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
         if do_dev_pic:
@@ -6241,7 +6257,7 @@ def get_single_cnts(image_raw, mask_pics):
                 # 获取所有非零像素的x和y坐标
                 all_x = px_pts[:, 1]
                 all_y = px_pts[:, 0]
-                logger.debug(f'{px_area=}')
+                # logger.debug(f'{px_area=}')
 
                 if px_area >= 1:
                     # 计算不带padding的最小和最大x、y坐标
@@ -6433,7 +6449,7 @@ def get_grid_masks(img_file, frame_grid_strs):
 
         if isinstance(panel, tuple):
             outer_br, inner_br = panel
-            logger.warning(f'{inner_br=}')
+            # logger.warning(f'{inner_br=}')
             x, y, w, h = outer_br
             xx, yy, ww, hh = inner_br
             # ================绘制外圈矩形================
@@ -6977,8 +6993,8 @@ def order1pic(img_folder, i, media_type):
         ordered_cnts = list(chain(*single_cnts_grids))
         order_preview = get_order_preview(marked_frames, single_cnts_grids)
         write_pic(order_preview_jpg, order_preview)
-        if not bubble_order_strs:
-            if sd_img_folder.exists() and len(sd_bubble_order_strs) == len(ordered_cnts):
+        if sd_img_folder.exists() and not bubble_order_strs:
+            if len(sd_bubble_order_strs) == len(ordered_cnts):
                 # 把低清版图源的排序转换并录入到高清版图源
                 custom_cnts = []
                 for s in range(len(sd_bubble_order_strs)):
@@ -7010,7 +7026,8 @@ def order1pic(img_folder, i, media_type):
                     write_yml(order_yml, bubble_data_sorted)
                     logger.debug(f"已保存到{order_yml}")
             elif sd_bubble_order_strs:
-                logger.error(f'{sd_bubble_order_strs=}')
+                logger.error(
+                    f'[{img_file.stem}][{len(sd_bubble_order_strs)}/{len(ordered_cnts)}]{sd_bubble_order_strs=}')
     return img_file, ordered_cnts
 
 
@@ -7241,87 +7258,6 @@ def get_bubble_metadata(bubble_meta_str):
     return bubble_metadata
 
 
-def tesseract2meta(img_np, tess_zipped_data, ocr_para):
-    # 从docx段落中提取带格式的单词
-    ocr_lines = []
-    current_line = []
-    has_bold = False
-    has_italic = False
-
-    for run in ocr_para.runs:
-        run_text_parts = run.text.split('\n')
-        for i, part in enumerate(run_text_parts):
-            for word in part.split():
-                word_format = []
-                if run.bold:
-                    word_format.append("b")
-                    has_bold = True
-                if run.italic:
-                    word_format.append("i")
-                    has_italic = True
-                current_line.append((word, ''.join(word_format)))
-            # 如果当前部分不是最后一个部分，说明有一个换行符，需要开始新的行
-            if i < len(run_text_parts) - 1:
-                ocr_lines.append(current_line)
-                current_line = []
-
-    # 添加最后一行
-    if current_line:
-        ocr_lines.append(current_line)
-
-    ocr_lines = ocr_lines[1:]
-    # 段落的格式描述
-    if has_bold and has_italic:
-        para_format = "bi"
-    elif has_bold:
-        para_format = "b"
-    elif has_italic:
-        para_format = "i"
-    else:
-        para_format = ""
-
-    # 获取气泡元数据
-    bubble_meta_str = ocr_para.runs[0].text
-    bubble_metadata = get_bubble_metadata(bubble_meta_str)
-    bubble_color_str = bubble_metadata['bubble_color_str']
-    letter_color_str = bubble_metadata['letter_color_str']
-    line_infos = get_line_infos(tess_zipped_data, img_np)
-
-    words_w_format = []
-    if len(ocr_lines) == len(line_infos):
-        # 行数相等时
-        for l in range(len(line_infos)):
-            # 每一行
-            word_imgs = line_infos[l]
-            ocr_line = ocr_lines[l]
-            tess_words = [x[0] for x in word_imgs]
-            ocr_words = [x[0] for x in ocr_line]
-            if len(tess_words) == len(ocr_line):
-                # 词数相等时
-                for w in range(len(word_imgs)):
-                    # 每一词
-                    pos_meta = word_imgs[w]
-                    text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-                    # 计算裁剪出的单词图片的黑色像素面积
-                    # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
-                    if isinstance(word_img, ndarray):
-                        word_img = fromarray(word_img)
-                    # 转换为灰度图像
-                    gray_img = word_img.convert('L')
-                    # 转换为二值图像
-                    binary_img = gray_img.point(lambda x: 0 if x <= bit_thres else 255, '1')
-                    # 计算黑色像素的数量（假设黑色像素的值为0）
-                    black_px_area = binary_img.histogram()[0]
-                    text_w_format = ocr_line[w]
-                    format_tuple = text_w_format + (height, black_px_area,)
-                    words_w_format.append(format_tuple)
-            else:
-                logger.error(f'词数不相等, {tess_words=}, {ocr_words=}')
-    else:
-        logger.error(f'行数不相等, [{len(ocr_lines)}-{len(line_infos)}]{ocr_para.text=}')
-    return bubble_color_str, letter_color_str, words_w_format
-
-
 def get_ocr_data(ocr_engine, pic_ocr_data, img_np, media_lang, elements_num):
     if ocr_engine in pic_ocr_data:
         # 已经识别过
@@ -7534,14 +7470,6 @@ def is_valid_tense(word):
     return False
 
 
-def calculate_similarity(lines1, lines2):
-    total_similarity = 0
-    for line1, line2 in zip(lines1, lines2):
-        s = SequenceMatcher(None, line1, line2)
-        total_similarity += s.ratio()
-    return total_similarity / len(lines1) if lines1 else 0
-
-
 @logger.catch
 def get_final_token(token1, token2, up_ratio, is_sent_start, i1, i2, text1, line1):
     # 找到这个字母所在的完整单词
@@ -7612,6 +7540,7 @@ def get_final_token(token1, token2, up_ratio, is_sent_start, i1, i2, text1, line
     return final_token
 
 
+@logger.catch
 def get_sents(text):
     """获取文本中的所有句子的起始和结束位置"""
     # 考虑句号、问号、感叹号、省略号等作为句子的结束
@@ -7626,6 +7555,7 @@ def get_sents(text):
     return sentences
 
 
+@logger.catch
 def adjust_sent(token1, token2, text1, adj_text1):
     final_token = token1
     ori_sents = get_sents(text1)
@@ -7650,6 +7580,7 @@ def adjust_sent(token1, token2, text1, adj_text1):
     return final_token
 
 
+@logger.catch
 def fix_w_tess(text1, text2):
     # 将输入文本按行分割
     lines1 = text1.strip().splitlines()
@@ -7662,15 +7593,22 @@ def fix_w_tess(text1, text2):
 
     # 如果 lines1 比 lines2 少一行
     if len(lines1) + 1 == len(lines2):
-        # 情况1：少的是第一行
-        sim1 = calculate_similarity(lines1, lines2[1:])
-        # 情况2：少的是最后一行
-        sim2 = calculate_similarity(lines1, lines2[:-1])
-        # 选择相似度最高的情况
-        if sim1 > sim2:
-            lines1 = [None] + lines1
-        else:
-            lines1 = lines1 + [None]
+        max_similarity = 0
+        max_sim_index = -1
+        # 枚举每次去掉 lines2 的一行
+        for i in range(len(lines2)):
+            temp_lines2 = lines2[:i] + lines2[i + 1:]
+            total_similarity = 0
+            for line1, line2 in zip(lines1, temp_lines2):
+                s = SequenceMatcher(None, line1, line2)
+                total_similarity += s.ratio()
+            sim = total_similarity / len(lines1) if lines1 else 0
+            if sim > max_similarity:
+                max_similarity = sim
+                max_sim_index = i
+        # 根据相似度最高的情况调整 lines1
+        lines1 = lines1[:max_sim_index] + [None] + lines1[max_sim_index:]
+        # print()
 
     # 当前处理到的字符位置
     pin = 0
@@ -7852,12 +7790,19 @@ def run2ansi(run):
         return text
 
 
-def get_dst_font_size(src_font_size):
+@logger.catch
+def get_dst_font_size(src_font_size, bubble_color_str, letter_color_str):
     if font_size_ratio_min <= src_font_size / global_font_size <= font_size_ratio_max:
         dst_font_size = global_font_size
     else:
         dst_font_size = round(src_font_size * 1.2 / 5) * 5
-    dst_font_size = clip(dst_font_size, font_size_min, font_size_max)
+    color_locate = f"{bubble_color_str}-{letter_color_str}"
+    # logger.debug(f'{color_locate=}')
+    if color_locate in font_size_range_dic:
+        cfont_size_min, cfont_size_max = parse_range(font_size_range_dic[color_locate])
+        dst_font_size = clip(dst_font_size, cfont_size_min, cfont_size_max)
+    else:
+        dst_font_size = clip(dst_font_size, font_size_min, font_size_max)
     return int(dst_font_size)
 
 
@@ -7888,6 +7833,29 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
         for c in range(len(ordered_cnts)):
             single_cnt = ordered_cnts[c]
             color_pattern = single_cnt.color_pattern
+            cp_bubble, cp_letter = color_pattern
+            if isinstance(cp_letter, list):
+                # 文字为双色
+                color_letter = ColorDouble(cp_letter)
+            else:
+                # 文字为单色
+                color_letter = Color(cp_letter)
+            if isinstance(cp_bubble, list):
+                # 气泡为渐变色
+                color_bubble = ColorGradient(cp_bubble)
+            elif cp_bubble == '':
+                # 无框字
+                color_bubble = None
+            else:
+                # 气泡为单色
+                color_bubble = Color(cp_bubble)
+            bubble_color_str = cp_bubble
+            if '-' in cp_bubble:
+                bubble_color_str = cp_bubble.split('-')[0]
+            letter_color_str = cp_letter
+            if '-' in cp_letter:
+                letter_color_str = cp_letter.split('-')[0]
+
             img_np = single_cnt.cropped_img
             img_md5 = generate_md5(img_np)
             cp_bubble, cp_letter = color_pattern
@@ -7973,8 +7941,8 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             heights_textwords = [x.br_h for x in textwords]
             heights_textlines = [x.br_h for x in textlines]
 
-            heights_tess_words = filter_within_bounds(heights_tess_words)
-            heights_textwords = filter_within_bounds(heights_textwords)
+            heights_tess_words = filter_w_bounds(heights_tess_words)
+            heights_textwords = filter_w_bounds(heights_textwords)
 
             heights = heights_tess_words + heights_tess_lines + heights_textwords + heights_textlines
 
@@ -7993,7 +7961,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
                     # 计算平均高度
                     src_font_size = mean(heights)
                 src_font_size = int(src_font_size)
-                dst_font_size = get_dst_font_size(src_font_size)
+                dst_font_size = get_dst_font_size(src_font_size, bubble_color_str, letter_color_str)
             br_area_real = (single_cnt.br_w - 2) * (single_cnt.br_h - 2)
             fulfill_ratio = single_cnt.area / br_area_real
             bubble_shape = '未知'
@@ -8080,20 +8048,12 @@ def get_line_infos(tess_zipped_data, img_np):
     return line_infos
 
 
-@logger.catch
-def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
-    logger.warning(f'[{page_ind=}]{bubble_ind=}')
-    auto_subdir = Auto / img_folder.name
-
-    # ================全白图像================
-    image_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+def draw_para(page_ind, bubble_ind, img_np, tess_zipped_data, rec_results_vision):
     nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
-    white_img = ones((nh, nw, 3), dtype=uint8) * 255
-    # ================文本================
-    bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
+    image_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+
     tess_zipped_data4 = [x for x in tess_zipped_data if x[0] == 4]
     tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
-    vision_lines = vision_text_format.splitlines()
 
     cp_bubble_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}.jpg'
     cp_br_tess_line_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_line.jpg'
@@ -8101,9 +8061,9 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     cp_br_vision_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_vision.jpg'
     cp_br_textword_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textword.jpg'
     cp_br_textline_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textline.jpg'
-
     write_pic(cp_bubble_jpg, img_np)
 
+    # ================tesseract坐标绘制================
     br_tess_word_image_pil = image_pil.convert("RGBA")
     br_tess_word_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
     br_tess_word_draw = ImageDraw.Draw(br_tess_word_overlay)
@@ -8124,6 +8084,7 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     br_tess_line_image_pil.paste(br_tess_line_overlay, mask=br_tess_line_overlay)
     write_pic(cp_br_tess_line_jpg, br_tess_line_image_pil)
 
+    # ================vision坐标绘制================
     if rec_results_vision:
         br_vision_image_pil = image_pil.convert("RGBA")
         br_vision_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
@@ -8135,10 +8096,8 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
         br_vision_image_pil.paste(br_vision_overlay, mask=br_vision_overlay)
         write_pic(cp_br_vision_jpg, br_vision_image_pil)
 
-    # ================获取每一行图像================
+    # ================cv2坐标绘制================
     rec_textblocks = get_textblocks(img_np, media_type)
-    textlines = []
-    textwords = []
     if rec_textblocks:
         rec_textblock = rec_textblocks[0]
         textlines = rec_textblock.textlines
@@ -8165,13 +8124,28 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
         textblock_bubbles = get_textblock_bubbles(img_np, rec_textblocks)
         cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{len(textlines)}].jpg'
         write_pic(cp_textblock_jpg, textblock_bubbles)
+    else:
+        textlines = []
+    return textlines
+
+
+@logger.catch
+def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
+    logger.warning(f'[{page_ind=}]{bubble_ind=}')
+    auto_subdir = Auto / img_folder.name
+
+    # ================全白图像================
+    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
+    white_img = ones((nh, nw, 3), dtype=uint8) * 255
+    # ================文本================
+    bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
+    vision_lines = vision_text_format.splitlines()
+    textlines = draw_para(page_ind, bubble_ind, img_np, tess_zipped_data, rec_results_vision)
 
     # ================获取气泡元数据================
-    bubble_meta_list = bubble_meta_str.split('~')
     bubble_metadata = get_bubble_metadata(bubble_meta_str)
     bubble_color_str = bubble_metadata['bubble_color_str']
     letter_color_str = bubble_metadata['letter_color_str']
-
     color_locate = f"{bubble_color_str}-{letter_color_str}"
     logger.warning(f'{color_locate=}')
     char_area_dict, word_actual_areas_dict = {}, {}
@@ -8468,6 +8442,8 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
     return ocr_doc, all_cropped_imgs
 
 
+@timer_decorator
+@logger.catch
 def merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems):
     ocr_doc = Document(src_docx)
     sd_ocr_doc = Document(sd_src_docx)
@@ -8479,7 +8455,7 @@ def merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems):
     for i in range(len(ocr_full_paragraphs)):
         hd_para = ocr_doc.paragraphs[i]
         sd_para = sd_ocr_doc.paragraphs[i]
-        if 'Horizontal' in hd_para.text:
+        if 'Horizontal' in hd_para.text or 'Vertical' in hd_para.text:
             print(hd_para.text)
             new_run = hd_para.add_run(lf)
             for sd_run in sd_para.runs:
@@ -8492,7 +8468,7 @@ def merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems):
                 new_run.font.size = sd_run.font.size
                 new_run.font.color.rgb = sd_run.font.color.rgb
 
-        if 'Horizontal' in hd_para.text:
+        if 'Horizontal' in hd_para.text or 'Vertical' in hd_para.text:
             print(hd_para.text)
             bubble_meta_str = hd_para.text.splitlines()[0]
             hd_para.clear()
@@ -8503,7 +8479,8 @@ def merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems):
             for r in range(len(sd_para.runs)):
                 sd_run = sd_para.runs[r]
                 if r == 0:
-                    text_to_add = '\n'.join(sd_run.text.splitlines[1:])
+                    first_line = sd_run.text.splitlines()[0]
+                    text_to_add = sd_run.text.removeprefix(f'{first_line}\n')
                 else:
                     text_to_add = sd_run.text
 
@@ -8881,6 +8858,7 @@ def fill_textarea_in_browser(browser, input_text, activate_browser):
     return run_apple_script(apple_script)
 
 
+@logger.catch
 def get_QA(browser):
     """
     从当前浏览器中提取问答对，并进行格式化和清理。
@@ -8925,44 +8903,27 @@ def get_QA(browser):
     class_ = "min-h-[20px]"
     divs = simple_soup.find_all('div', class_=class_)
     for div in divs:
-        raw_div = deepcopy(div)
-        raw_div_str = str(raw_div)
+        raw_div_str = str(div)
         # 根据文本特征判断发送者身份
         if 'dark:prose-invert light' in raw_div_str:
             text_role = 'chatGPT'
         else:
             text_role = '用户'
 
-        # 删除最外层的div标签
-        for _ in range(4):
-            if isinstance(div, Tag) and div.name == 'div':
-                for child in div.children:
-                    if not isinstance(child, NavigableString):
-                        div = child
-                        break
-
-        # 删除不需要的外部 div 标签，并提取目标 div
-        if isinstance(div, Tag) and div.name == 'div' and len(div.contents) == 1:
-            # 删除最外层的 div 标签
-            div = div.contents[0].strip()
-            target_div = div
+        # 查找 code 标签
+        code_tag = div.find('code')
+        if code_tag:
+            # 如果找到 code 标签，提取其内容
+            target_div = str(code_tag).strip()
         else:
-            # 去掉底部的 button 和 svg 标签
-            for tag in reversed(div.find_all(['button', 'svg'])):
-                tag.extract()
-
-            target_div = div.prettify().strip()
-            # 如果包含不符合规定的内容，使用原始 div
-            if 'This content may violate our' in target_div:
-                target_div = raw_div.prettify().strip()
-        # logger.warning(text_role)
-        # logger.info(target_div)
+            # 如果没有找到 code 标签，提取 div 标签的文本内容
+            target_div = div.get_text().strip()
         target_divs.append(target_div)
     return target_divs
 
 
-# @logger.catch
 # @timer_decorator
+@logger.catch
 def step5_chatgpt_translate(read_html, raw_html, target_lang):
     """
     将 .docx 文档翻译成指定的目标语言，并将翻译后的文本保存到一个 .txt 文件中。
@@ -9002,16 +8963,17 @@ def step5_chatgpt_translate(read_html, raw_html, target_lang):
         current_lines = split_lines[s]
         current_text = lf.join(current_lines)
         full_prompt = f'{prompt_prefix}{lf}```html{lf}{current_text}{lf}```'
-        if full_prompt not in target_divs and do_automate:
-            logger.warning(f'{s=}, {len(current_lines)=}, {len(current_text)=}')
-            logger.info(full_prompt)
-            fill_textarea_in_browser(browser, full_prompt, activate_browser)
-            if s != len(split_lines):
-                # 等待回答完成
-                sleep(sleep_time)
-            else:
-                # 最后一次等待时间为一半
-                sleep(sleep_time / 2)
+        if full_prompt not in target_divs:
+            if do_automate:
+                logger.warning(f'{s=}, {len(current_lines)=}, {len(current_text)=}')
+                logger.info(full_prompt)
+                fill_textarea_in_browser(browser, full_prompt, activate_browser)
+                if s != len(split_lines):
+                    # 等待回答完成
+                    sleep(sleep_time)
+                else:
+                    # 最后一次等待时间为一半
+                    sleep(sleep_time / 2)
 
     logger.warning(f'chatGPT翻译完成, {len(split_lines)=}')
 
@@ -9030,13 +8992,14 @@ def step5_chatgpt_translate(read_html, raw_html, target_lang):
         # 查找 code 标签
         code_tag = gpt_soup.find('code')
         if code_tag is None:
-            print()
-        # 获取 code 标签的文本内容
-        code_text = code_tag.get_text()
+            code_text = gpt_html
+        else:
+            code_text = code_tag.get_text().strip()
         # 对文本内容进行反向转义
         unescaped_text = unescape(code_text)
         # 输出结果
-        unescaped_texts.append(unescaped_text.strip())
+        # unescaped_texts.append(unescaped_text.strip())
+        unescaped_texts.append(code_text)
     dst_html_text = lf.join(unescaped_texts)
     print(dst_html_text)
     write_txt(raw_html, dst_html_text)
@@ -9103,10 +9066,10 @@ def get_dst_doc(src_docx, img_list, raw_html, dst_html):
     dst_html_text = sub(r'(?<![a-zA-Z])\s|\s(?![a-zA-Z])', '', dst_html_text)
 
     soup = BeautifulSoup(dst_html_text, 'html.parser')
-    chinese_punctuations = "，。？！：；（）【】｛｝《》…“‘”’"
+    cn_puncts = "，。？！：；（）【】｛｝《》…“‘”’"
     for p in soup.find_all('p'):
         for idx, child in enumerate(p.contents):
-            if (isinstance(child, NavigableString) and child[0] in chinese_punctuations and
+            if (isinstance(child, NavigableString) and child[0] in cn_puncts and
                     child.parent.name == 'p'):  # 确保该子节点是<p>标签的直接文本内容
                 # 如果当前子节点是字符串并且以中文标点开头
                 if idx > 0:  # 确保它不是第一个子节点
@@ -9405,6 +9368,10 @@ if __name__ == "__main__":
         white_padding, black_padding, light_padding, dark_padding, normal_padding = paddings
     else:
         white_padding = black_padding = light_padding = dark_padding = normal_padding = WBLDN_padding
+    font_size_range_dic = app_config.config_data['font_size_range_dic']
+    font_size_min, font_size_max = parse_range(font_size_range_dic['default'])
+    font_size_rarange = app_config.config_data['font_size_rarange']
+    font_size_ratio_min, font_size_ratio_max = parse_range(font_size_rarange)
     stem_level = app_config.config_data['stem_level']
     media_lang = app_config.config_data['media_lang']
     target_lang = app_config.config_data['target_lang']
@@ -9559,7 +9526,7 @@ if __name__ == "__main__":
     r_dot = bubble_recognize['r_dot']
 
     bubble_seg = app_config.config_data['bubble_seg']
-    all_caps = bubble_seg['all_caps']
+    use_dilate = bubble_seg['use_dilate']
     adapt_big_letter = bubble_seg['adapt_big_letter']
     check_note = bubble_seg['check_note']
     check_dots = bubble_seg['check_dots']
@@ -9571,15 +9538,14 @@ if __name__ == "__main__":
     bold_thres = ocr_settings['bold_thres']
     y_thres = ocr_settings['y_thres']
     bit_thres = ocr_settings['bit_thres']
-    font_size_range = ocr_settings['font_size_range']
-    font_size_min, font_size_max = parse_range(font_size_range)
-    font_size_rarange = ocr_settings['font_size_rarange']
-    font_size_ratio_min, font_size_ratio_max = parse_range(font_size_rarange)
+    min_char_area = ocr_settings['min_char_area']
+    cal_method = ocr_settings['cal_method']
     print_tables = ocr_settings['print_tables']
     init_ocr = ocr_settings['init_ocr']
     use_textwords = ocr_settings['use_textwords']
     stitch_spacing = ocr_settings['stitch_spacing']
     merge_update = ocr_settings['merge_update']
+    all_caps = ocr_settings['all_caps']
 
     baidu_ocr = app_config.config_data['baidu_ocr']
     obd_app_id = baidu_ocr['APP_ID']
