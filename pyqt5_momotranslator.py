@@ -188,6 +188,14 @@ if SYSTEM in ['MAC', 'M1']:
 else:
     processor_name = machine()
 
+if SYSTEM == 'WINDOWS':
+    import pytesseract
+
+    # 如果PATH中没有tesseract可执行文件，请指定tesseract路径
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+    from winocr import recognize_pil
+
 line_feeds = line_feed * 2
 
 lf = line_feed
@@ -247,6 +255,7 @@ pic_tuple = tuple(pictures_exclude.split(','))
 scan_tuple = (
     'zSoU-Nerd',
     'zWater',
+    'ZZZZZ',
 )
 
 spacing_ratio = 0.2
@@ -542,6 +551,14 @@ vision_language_options = {
     'Korean': 'ko',
 }
 
+winocr_language_options = {
+    'Chinese Simplified': 'zh-CN',
+    'Chinese Traditional': 'zh-TW',
+    'English': 'en',
+    'Japanese': 'ja',
+    'Korean': 'ko',
+}
+
 baidu_language_options = {
     'Chinese Simplified': 'CHN_ENG',
     'Chinese Traditional': 'CHN_ENG',
@@ -778,249 +795,6 @@ def iload_data(file_path):
     return data_dic
 
 
-# @logger.catch
-def colored_text(text, color):
-    colors = {
-        'blue': '\033[94m',
-        'green': '\033[92m',
-        'purple': '\033[95m',
-        'highlight': '\033[91m',
-        'end': '\033[0m'
-    }
-    return colors[color] + text + colors['end']
-
-
-# @logger.catch
-def simplify_areas(areas):
-    # 简化Actual Areas的表示
-    areas.sort()
-    simplified = []
-    start = areas[0]
-    end = start
-    for i in range(1, len(areas)):
-        if areas[i] == end + 1:
-            end = areas[i]
-        else:
-            if start == end:
-                simplified.append(str(start))
-            else:
-                simplified.append(f"{start}~{end}")
-            start = areas[i]
-            end = start
-    if start == end:
-        simplified.append(str(start))
-    else:
-        simplified.append(f"{start}~{end}")
-    return ', '.join(simplified)
-
-
-def filter_w_bounds(data, key=lambda x: x):
-    """
-    过滤掉列表中指定比例的最高和最低值。
-
-    :param data: 列表数据。
-    :param key: 用于提取比较值的函数。
-    :param discard_ratio: 要丢弃的数据比例。
-    :return: 过滤后的列表。
-    """
-    if not data:
-        return []
-
-    # 根据提供的键函数排序
-    sorted_data = sorted(data, key=key)
-    discard_count = int(discard_ratio * len(sorted_data))
-
-    # 计算上下界
-    lower_bound = key(sorted_data[discard_count])
-    upper_bound = key(sorted_data[-discard_count - 1])
-
-    # 过滤数据
-    return [x for x in data if lower_bound - 1 <= key(x) <= upper_bound + 1]
-
-
-@logger.catch
-def cal_words_data(raw_words_data):
-    words_data = filter_w_bounds(raw_words_data, key=lambda x: x[2])
-    logger.debug(f'{len(raw_words_data)=}, {len(words_data)=}')
-
-    # 对words_data进行处理，把表示我的I替换成|
-    for i, (word, word_format, height, area) in enumerate(words_data):
-        # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
-        word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', word)
-        words_data[i] = (word, word_format, height, area)
-
-    # 获取所有独特的字符
-    appeared_chars = set()
-    unique_chars = set(''.join([word for word, word_format, height, black_px_area in words_data]))
-    formatted_chars = set()
-    for char in unique_chars:
-        formatted_chars.add(char)  # 无格式字符
-        formatted_chars.add(f"{char}_b")  # 粗体字符
-        formatted_chars.add(f"{char}_i")  # 斜体字符
-        formatted_chars.add(f"{char}_bi")  # 粗斜体字符
-    char_to_index = {char: index for index, char in enumerate(formatted_chars)}
-
-    # 初始化矩阵和向量
-    A = zeros((len(words_data), len(formatted_chars)))
-    b = zeros(len(words_data))
-    weights = zeros(len(words_data))
-
-    for i, (word, word_format, height, area) in enumerate(words_data):
-        for char in word:
-            char_key = char
-            if word_format != '':
-                char_key += f'_{word_format}'
-                # logger.debug(f'{char_key=}')
-            A[i, char_to_index[char_key]] += 1
-            appeared_chars.add(char_key)
-        b[i] = area
-        weights[i] = len(word)
-
-    W = np.diag(np.sqrt(weights))
-    WA = W @ A
-    Wb = W @ b
-    logger.warning(f'{cal_method=}')
-    if cal_method == '加权最小二乘法':
-        # 使用加权最小二乘法解方程组
-        x, residuals, rank, s = np.linalg.lstsq(WA, Wb, rcond=None)
-        # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
-    elif cal_method == '非负最小二乘法':
-        # 使用非负最小二乘法解方程组
-        x, residuals = nnls(WA, Wb)
-        # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
-    else:
-        # 加权非负最小二乘法
-        # 设置非负约束
-        bounds = (min_char_area, np.inf)
-        result = lsq_linear(WA, Wb, bounds=bounds)
-        x = result.x
-    char_to_area = {char: max(min_char_area, x[char_to_index[char]]) for char in formatted_chars}
-
-    # 输出结果
-    char_table = PrettyTable()
-    char_table.field_names = ["Character", "Expected Area", "Bold", "Italic", "Bold Italic"]
-    for char in sorted(unique_chars):
-        row = [
-            char,
-            round(char_to_area[char], 2) if char in appeared_chars else '',
-            round(char_to_area[f"{char}_b"], 2) if f"{char}_b" in appeared_chars else '',
-            round(char_to_area[f"{char}_i"], 2) if f"{char}_i" in appeared_chars else '',
-            round(char_to_area[f"{char}_bi"], 2) if f"{char}_bi" in appeared_chars else ''
-        ]
-        char_table.add_row(row)
-    if print_tables:
-        print(char_table)
-
-    word_table = PrettyTable()
-    word_table.field_names = ['Word', 'Actual Area', 'Expected Area', 'Difference']
-    for word, word_format, height, area in sorted(words_data, key=lambda x: x[0]):
-        color_map = {
-            '': word,
-            'b': colored_text(word, 'blue'),
-            'i': colored_text(word, 'green'),
-            'bi': colored_text(word, 'purple')
-        }
-        colored_word = f"{color_map[word_format]}[{height}]"
-        expect_area = sum(
-            [char_to_area[char + ('' if word_format == '' else f'_{word_format}')] for char in word])
-        difference = round(expect_area - area, 2)
-        if abs(difference) >= 0.2 * area:
-            difference = colored_text(str(difference), 'highlight')
-        word_table.add_row([colored_word, area, round(expect_area, 2), difference])
-    if print_tables:
-        print(word_table)
-    # 创建字典来存储字符和其期望的面积
-    char_area_dict = {char: round(char_to_area[char], 2) for char in appeared_chars}
-
-    # 创建字典来存储单词（包括格式后缀）和其期望的面积，以及另一个字典来存储单词的实际面积列表
-    word_area_dict = {}
-    word_actual_areas_dict = {}
-
-    for word, word_format, height, actual_area in words_data:
-        word_key = word + ('' if word_format == '' else f'_{word_format}')
-        expect_area = sum([char_to_area[char + ('' if word_format == '' else f'_{word_format}')] for char in word])
-        if word_key not in word_area_dict:
-            word_area_dict[word_key] = [expect_area]
-            word_actual_areas_dict[word_key] = [actual_area]
-        else:
-            word_area_dict[word_key].append(expect_area)
-            word_actual_areas_dict[word_key].append(actual_area)
-
-    # 计算字符出现次数
-    char_count = {}
-    for word, word_format, height, area in words_data:
-        for char in word:
-            char_key = char + ('' if word_format == '' else f'_{word_format}')
-            char_count[char_key] = char_count.get(char_key, 0) + 1
-
-    # 输出结果
-    seg_char_table = PrettyTable()
-    seg_char_table.field_names = ["#", "Character", "Expected Area"]
-    for idx, (char, area) in enumerate(sorted(char_area_dict.items()), 1):
-        count_suffix = f"[{char_count[char]}]" if char in char_count and char_count[char] > 1 else ""
-        seg_char_table.add_row([idx, char, f"{area}{count_suffix}"])
-    if print_tables:
-        print(seg_char_table)
-    seg_word_table = PrettyTable()
-    seg_word_table.field_names = ['#', 'Word', 'Expected Area', 'Actual Areas']
-    for idx, (word_key, areas) in enumerate(sorted(word_area_dict.items()), 1):
-        avg_expect_area = round(sum(areas) / len(areas), 2)
-        seg_word_table.add_row([idx, word_key, avg_expect_area, simplify_areas(word_actual_areas_dict[word_key])])
-    if print_tables:
-        print(seg_word_table)
-    return char_area_dict, word_actual_areas_dict
-
-
-@timer_decorator
-@logger.catch
-def get_area_dic(area_folder_names):
-    min_data_len = 28
-    area_data = defaultdict(list)
-    area_dic = {}
-    all_data = []
-
-    if area_folder_names is None:
-        area_folder_names = []
-    for area_folder_name in area_folder_names:
-        area_img_folder = ComicProcess / area_folder_name
-        sub_area_yml = area_img_folder.parent / f'{area_img_folder.name}-文字面积.yml'
-        sub_area_data = iload_data(sub_area_yml)
-        for key, val in sub_area_data.items():
-            area_data[key].extend(val)
-    for color_locate in area_data:
-        words_w_format_str = area_data[color_locate]
-        words_w_format_str.sort()
-        words_data = []
-        for w in range(len(words_w_format_str)):
-            word_w_format_str = words_w_format_str[w]
-            parts = word_w_format_str.rsplit('|', 2)
-            if len(parts) == 2:
-                word = parts[0]
-                word_format = ''
-                nums_str = parts[1]
-            elif len(parts) == 3:
-                word = parts[0]
-                word_format = parts[1]
-                nums_str = parts[2]
-            else:
-                # 如果parts的长度大于3，那么word中可能包含'|'字符
-                word = '|'.join(parts[:-2])
-                word_format = parts[-2]
-                nums_str = parts[-1]
-            height, black_px_area = map(int, nums_str.split(','))
-            word_data = (word, word_format, height, black_px_area)
-            words_data.append(word_data)
-        data_tup = (color_locate, words_data)
-        all_data.append(data_tup)
-    for data_tup in all_data:
-        color_locate, words_data = data_tup
-        print(color_locate)
-        if len(words_data) >= min_data_len:
-            char_area_dict, word_area_dict = cal_words_data(words_data)
-            area_dic[color_locate] = (char_area_dict, word_area_dict)
-    return area_dic
-
-
 # ================读取文本================
 def read_txt(file_path, encoding='utf-8'):
     """
@@ -1061,10 +835,10 @@ def write_txt(file_path, text_input, encoding='utf-8', ignore_empty=True):
                 f.write(otext)
 
 
-def generate_md5(image_array):
-    image_data = imencode('.png', image_array)[1].tostring()
+def generate_md5(img_array):
+    img_data = imencode('.png', img_array)[1].tostring()
     file_hash = md5()
-    file_hash.update(image_data)
+    file_hash.update(img_data)
     return file_hash.hexdigest()
 
 
@@ -1125,6 +899,35 @@ def write_csv(csv_path, data_input, headers=None):
                 data_input.to_csv(csv_path, encoding='utf-8', index=False)
     except BaseException as e:
         printe(e)
+
+
+def conv_img(img, target_format='PIL'):
+    """
+    将图像转换为指定的格式。
+
+    :param img: 输入图像，可以是 NumPy 数组或 PIL 图像。
+    :param target_format: 目标格式，可以是 'PIL' 或 'CV'。
+    :return: 转换后的图像。
+    """
+    if target_format == 'PIL':
+        if isinstance(img, ndarray):
+            # 转换 NumPy 数组为 PIL 图像
+            if len(img.shape) == 2:  # 灰度或黑白图像
+                cimg = Image.fromarray(img, 'L')
+            else:  # if len(img.shape) == 3:  # 彩色图像
+                cimg = Image.fromarray(img, 'RGB')
+        else:  # isinstance(img, Image.Image)
+            cimg = img
+    else:
+        # 如果是PIL图像，转换为NumPy数组
+        if isinstance(img, Image.Image):
+            cimg = array(img)
+            # 如果图像有三个维度，并且颜色为三通道，则进行颜色空间的转换
+            if cimg.ndim == 3 and cimg.shape[2] == 3:
+                cimg = cvtColor(cimg, COLOR_RGB2BGR)
+        else:  # isinstance(img, ndarray)
+            cimg = img
+    return cimg
 
 
 @logger.catch
@@ -1236,6 +1039,19 @@ def parse_range(range_str):
     return ranges
 
 
+@logger.catch
+def find_nth_largest(nums, n):
+    if len(nums) < n:
+        return None, None
+    # 使用enumerate获取元素及其索引，并按值排序
+    sorted_nums = sorted(enumerate(nums), key=lambda x: x[1], reverse=True)
+    # 获取第N大的元素（注意列表索引从0开始，所以要用n-1）
+    nth_largest = sorted_nums[n - 1]
+    # nth_largest是一个元组，其中第一个元素是原始索引，第二个元素是值
+    original_index, value = nth_largest
+    return value, original_index
+
+
 def lcs(X, Y):
     """
     计算两个字符串X和Y的最长公共子序列（Longest Common Subsequence, LCS）。
@@ -1309,20 +1125,20 @@ def convert_str2num(s):
 
 
 # @logger.catch
-def form2data(ocr_zipped_data_form):
-    ocr_zipped_data = []
-    for t in range(len(ocr_zipped_data_form)):
-        row = ocr_zipped_data_form[t]
+def form2data(ocr_zdata_form):
+    ocr_zdata = []
+    for t in range(len(ocr_zdata_form)):
+        row = ocr_zdata_form[t]
         if row and '|' in row:
             row_nums_str, par, row_text = row.partition('|')
             row_nums = row_nums_str.split(',')
             # 使用列表推导式将字符串转换为相应的整数或小数
             row_nums = [convert_str2num(x) for x in row_nums]
             tess_result = row_nums + [row_text]
-            ocr_zipped_data.append(tess_result)
+            ocr_zdata.append(tess_result)
         else:
             logger.error(f'[{t}]{row=}')
-    return ocr_zipped_data
+    return ocr_zdata
 
 
 def iread_csv(csv_file, pop_head=True, get_head=False):
@@ -1369,14 +1185,14 @@ def rgb2str(rgb_tuple):
     return color_str
 
 
-def toBGR(image_raw):
-    if len(image_raw.shape) == 2:
-        image_raw = cvtColor(image_raw, COLOR_GRAY2BGR)
-    elif image_raw.shape[2] == 3:
+def toBGR(img_raw):
+    if len(img_raw.shape) == 2:
+        img_raw = cvtColor(img_raw, COLOR_GRAY2BGR)
+    elif img_raw.shape[2] == 3:
         pass
     else:
-        image_raw = cvtColor(image_raw, COLOR_BGRA2BGR)
-    return image_raw
+        img_raw = cvtColor(img_raw, COLOR_BGRA2BGR)
+    return img_raw
 
 
 def color2rgb(color):
@@ -1724,15 +1540,15 @@ def a5_frame():
     return
 
 
-def get_edge_pxs(image_raw):
-    h, w = image_raw.shape[:2]
+def get_edge_pxs(img_raw):
+    h, w = img_raw.shape[:2]
     # 转换为RGBA格式
-    image_rgba = cvtColor(image_raw, COLOR_BGR2BGRA)
+    img_rgba = cvtColor(img_raw, COLOR_BGR2BGRA)
     # 将非边框像素的alpha设置为0
     mask = ones((h, w), dtype=bool)
     mask[edge_size:-edge_size, edge_size:-edge_size] = False
-    image_rgba[~mask] = [0, 0, 0, 0]
-    return image_rgba
+    img_rgba[~mask] = [0, 0, 0, 0]
+    return img_rgba
 
 
 def find_dominant_color(edge_pixels_rgba):
@@ -1787,11 +1603,11 @@ def find_dominant_colors(edge_pixels_rgba, tolerance=10, top_colors=10):
     return color_and_ratios_raw, combined_color_and_ratios
 
 
-def compute_frame_mask_single(image_raw, dominant_color, tolerance):
+def compute_frame_mask_single(img_raw, dominant_color, tolerance):
     dominant_color_int32 = array(dominant_color[:3]).astype(int32)
     lower_bound = maximum(0, dominant_color_int32 - tolerance)
     upper_bound = minimum(255, dominant_color_int32 + tolerance)
-    mask = inRange(image_raw, lower_bound, upper_bound)
+    mask = inRange(img_raw, lower_bound, upper_bound)
     return mask
 
 
@@ -2353,11 +2169,11 @@ def get_filter_inds(good_inds, hierarchy):
 
 
 # @logger.catch
-def get_colorful_bubbles(image_raw, bubble_cnts):
+def get_colorful_bubbles(img_raw, bubble_cnts):
     # 将原始图像转换为PIL图像
-    image_pil = fromarray(cvtColor(image_raw, COLOR_BGR2RGB))
+    img_pil = fromarray(cvtColor(img_raw, COLOR_BGR2RGB))
     # 创建一个与原图大小相同的透明图像
-    overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+    overlay = Image.new('RGBA', img_pil.size, rgba_zero)
     draw = ImageDraw.Draw(overlay)
 
     for f in range(len(bubble_cnts)):
@@ -2383,21 +2199,21 @@ def get_colorful_bubbles(image_raw, bubble_cnts):
         draw.text(xy_pos, text, font=msyh_font100, fill=trans_purple)
 
     # 将带有半透明颜色轮廓的透明图像与原图混合
-    image_pil.paste(overlay, mask=overlay)
+    img_pil.paste(overlay, mask=overlay)
     # 将 PIL 图像转换回 OpenCV 图像
-    blended_img = cvtColor(array(image_pil), COLOR_RGB2BGR)
+    blended_img = cvtColor(array(img_pil), COLOR_RGB2BGR)
     return blended_img
 
 
 # @logger.catch
-def get_textblock_bubbles(image_raw, all_textblocks):
-    ih, iw = image_raw.shape[0:2]
+def get_textblock_bubbles(img_raw, all_textblocks):
+    ih, iw = img_raw.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
 
     # 将原始图像转换为PIL图像
-    image_pil = fromarray(cvtColor(image_raw, COLOR_BGR2RGB))
+    img_pil = fromarray(cvtColor(img_raw, COLOR_BGR2RGB))
     # 创建一个与原图大小相同的透明图像
-    overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+    overlay = Image.new('RGBA', img_pil.size, rgba_zero)
     draw = ImageDraw.Draw(overlay)
 
     all_core_brp_coords = []
@@ -2413,8 +2229,8 @@ def get_textblock_bubbles(image_raw, all_textblocks):
         contour_points = [tuple(point[0]) for point in textblock.block_contour]
         if len(textlines) > 0:
             mask = drawContours(black_bg.copy(), [array(contour_points)], -1, 255, FILLED)
-            dilated_mask = dilate(mask, kernel5, iterations=1)
-            contours, _ = findContours(dilated_mask, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+            mask_d5 = dilate(mask, kernel5, iterations=1)
+            contours, _ = findContours(mask_d5, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
             contour = contours[0]
             points = [tuple(point[0]) for point in contour]
             draw.polygon(points, fill=textblock_rgba)
@@ -2449,9 +2265,9 @@ def get_textblock_bubbles(image_raw, all_textblocks):
         draw.polygon(core_brp_coords, outline=color_navy)
 
     # 将带有半透明颜色轮廓的透明图像与原图混合
-    image_pil.paste(overlay, mask=overlay)
+    img_pil.paste(overlay, mask=overlay)
     # 将 PIL 图像转换回 OpenCV 图像
-    blended_img = cvtColor(array(image_pil), COLOR_RGB2BGR)
+    blended_img = cvtColor(array(img_pil), COLOR_RGB2BGR)
     return blended_img
 
 
@@ -2523,7 +2339,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             letter_px = np.sum(letter_in_contour == 255)
 
             # ================检测文字轮廓================
-            letter_contours, letter_hierarchy = findContours(letter_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+            letter_contours, letter_hier = findContours(letter_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
             letter_cnts = []
             for q in range(len(letter_contours)):
                 letter_contour = letter_contours[q]
@@ -2563,7 +2379,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             # logger.debug(f'{border_thickness=:.4f}')
 
             # ================检测文字轮廓================
-            letter_contours, letter_hierarchy = findContours(letter_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+            letter_contours, letter_hier = findContours(letter_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
             letter_cnts = []
             for q in range(len(letter_contours)):
                 letter_contour = letter_contours[q]
@@ -2895,6 +2711,8 @@ class Contr:
         self.contour = contour
         if len(contour) >= 3:
             self.polygon = Polygon(np.vstack((contour[:, 0, :], contour[0, 0, :])))
+            if not self.polygon.is_valid:
+                self.polygon = self.polygon.buffer(0)
         else:
             self.polygon = None
 
@@ -2917,7 +2735,10 @@ class Contr:
         self.br_rt = self.area / self.br_area
         self.br_pts = rect2poly(*self.br)
         self.brp = Polygon(self.br_pts)
-
+        self.br_xy = (self.br_x, self.br_y)
+        self.br_uv = (self.br_u, self.br_v)
+        self.avg_w = self.area / self.br_h
+        self.avg_h = self.area / self.br_w
         self.M = moments(self.contour)
         # 这两行是计算质点坐标
         if self.M['m00'] != 0:
@@ -2930,6 +2751,21 @@ class Contr:
         self.cxy_pt = Point(self.cxy)
         self.cxy_str = f'{self.cx},{self.cy}'
         self.cyx_str = f'{self.cy},{self.cx}'
+        self.strokes = []
+
+    def add_stroke(self, stroke):
+        self.strokes.append(stroke)
+
+    def add_line_polygon(self, nw):
+        self.line_polygon = Polygon([
+            (0, self.br_y),
+            (nw, self.br_y),
+            (nw, self.br_v),
+            (0, self.br_v)
+        ])
+        self.line_br = [0, self.br_y, nw, self.br_h]
+        self.line_br_xy = (0, self.br_y)
+        self.line_br_uv = (nw, self.br_v)
 
     def add_cropped_img(self, cropped_img, letter_coors, color_pattern):
         self.cropped_img = cropped_img
@@ -3243,9 +3079,9 @@ class Rect:
             # 遍历四个方向，检查黑色像素数量并在满足条件时添加边框
             for direction, slices in direction_slices.items():
                 # 计算指定方向的黑色像素数量
-                black_pixels = np.sum(self.cleaned_mask[slices] == 0)
+                black_pxs = np.sum(self.cleaned_mask[slices] == 0)
                 # 如果黑色像素数量小于等于100，则在该方向添加边框
-                if black_pixels <= 100:
+                if black_pxs <= 100:
                     self.cleaned_mask[slices] = 255
 
             # 使用形态学操作移除噪声
@@ -3256,8 +3092,8 @@ class Rect:
             self.cleaned_mask = erode(self.cleaned_mask, kernel15, iterations=1)
 
             # 找到子图中所有黑色像素的坐标
-            black_pixels = where(self.cleaned_mask == 0)
-            black_y, black_x = black_pixels
+            black_pxs = where(self.cleaned_mask == 0)
+            black_y, black_x = black_pxs
 
             if not black_x.size or not black_y.size:
                 # 如果没有黑色像素，那么内部矩形就是整个矩形
@@ -3709,34 +3545,34 @@ class CustGraphicsScene(QGraphicsScene):
         self.type = self.__class__.__name__
         self.img_file = None
 
-    def load_qimg(self, image_data, img_file=None):
+    def load_qimg(self, img_data, img_file=None):
         self.img_file = img_file
         # 如果输入是Pillow图像，将其转换为NumPy数组
-        if isinstance(image_data, Image.Image):
-            image_data = array(image_data)
+        if isinstance(img_data, Image.Image):
+            img_data = array(img_data)
 
         # 确保输入数据是NumPy数组
-        if isinstance(image_data, ndarray):
+        if isinstance(img_data, ndarray):
             # 检查图像是否是灰度图
-            if len(image_data.shape) == 2:  # 灰度图，只有高度和宽度
-                height, width = image_data.shape
+            if len(img_data.shape) == 2:  # 灰度图，只有高度和宽度
+                height, width = img_data.shape
                 bytes_per_line = width  # 灰度图像的每行字节数
-                qimage_format = QImage.Format_Grayscale8  # 灰度图像格式
+                qimg_format = QImage.Format_Grayscale8  # 灰度图像格式
                 # 将NumPy数组转换为QImage
-                qimage = QImage(image_data.data, width, height, bytes_per_line, qimage_format)
+                qimage = QImage(img_data.data, width, height, bytes_per_line, qimg_format)
             else:  # 彩色图像
-                height, width, channel = image_data.shape
+                height, width, channel = img_data.shape
                 bytes_per_line = channel * width
                 if channel == 4:
                     # 如果输入图像有4个通道（带有Alpha通道）
-                    qimage_format = QImage.Format_ARGB32
+                    qimg_format = QImage.Format_ARGB32
                 elif channel == 3:
                     # 如果输入图像有3个通道
                     # 如果输入图像使用BGR顺序，交换颜色通道以获得正确的RGB顺序
-                    image_data = cvtColor(image_data, COLOR_BGR2RGB)
-                    qimage_format = QImage.Format_RGB888
+                    img_data = cvtColor(img_data, COLOR_BGR2RGB)
+                    qimg_format = QImage.Format_RGB888
                 # 将NumPy数组转换为QImage
-                qimage = QImage(image_data.data, width, height, bytes_per_line, qimage_format)
+                qimage = QImage(img_data.data, width, height, bytes_per_line, qimg_format)
             # 将QImage转换为QPixmap
             pixmap = QPixmap.fromImage(qimage)
             # ================清除之前的图像================
@@ -4034,9 +3870,9 @@ class OrderWindow(QMainWindow):
             self.img_ind = self.img_list.index(self.img_file)
             self.setWindowTitle(self.img_file.name)
             # ================显示图片================
-            self.image_raw = imdecode(fromfile(self.img_file, dtype=uint8), -1)
-            self.ih, self.iw = self.image_raw.shape[0:2]
-            self.cgs.load_qimg(self.image_raw, self.img_file)
+            self.img_raw = imdecode(fromfile(self.img_file, dtype=uint8), -1)
+            self.ih, self.iw = self.img_raw.shape[0:2]
+            self.cgs.load_qimg(self.img_raw, self.img_file)
             self.scale_by_percent()
             self.update_zoom_label()
             # ================将当前图片项设为选中状态================
@@ -4100,7 +3936,7 @@ class OrderWindow(QMainWindow):
                 self.open_img_by_path(self.img_file)
 
     def open_folder_by_dialog(self):
-        # 如果self.image_folder已经设置，使用其上一级目录作为起始目录，否则使用当前目录
+        # 如果self.img_folder已经设置，使用其上一级目录作为起始目录，否则使用当前目录
         self.img_folder = Path(self.img_folder) if self.img_folder else None
         start_directory = self.img_folder.parent.as_posix() if self.img_folder else "."
         img_folder = QFileDialog.getExistingDirectory(self, self.tr('Open Folder'), start_directory)
@@ -4605,9 +4441,9 @@ class MistWindow(QMainWindow):
             self.img_file_size = getsize(self.img_file)
             self.img_ind = self.img_list.index(self.img_file)
             # ================显示图片================
-            self.image_raw = imdecode(fromfile(self.img_file, dtype=uint8), -1)
-            self.ih, self.iw = self.image_raw.shape[0:2]
-            self.cgs.load_qimg(self.image_raw, self.img_file)
+            self.img_raw = imdecode(fromfile(self.img_file, dtype=uint8), -1)
+            self.ih, self.iw = self.img_raw.shape[0:2]
+            self.cgs.load_qimg(self.img_raw, self.img_file)
             self.scale_by_percent()
             self.update_zoom_label()
             # ================将当前图片项设为选中状态================
@@ -4647,7 +4483,7 @@ class MistWindow(QMainWindow):
                 self.add_recent_folder(self.img_folder)
 
     def open_folder_by_dialog(self):
-        # 如果self.image_folder已经设置，使用其上一级目录作为起始目录，否则使用当前目录
+        # 如果self.img_folder已经设置，使用其上一级目录作为起始目录，否则使用当前目录
         self.img_folder = Path(self.img_folder) if self.img_folder else None
         start_directory = self.img_folder.parent.as_posix() if self.img_folder else "."
         img_folder = QFileDialog.getExistingDirectory(self, self.tr('Open Folder'), start_directory)
@@ -4803,14 +4639,14 @@ class MistWindow(QMainWindow):
 
         for p, img_file in enumerate(self.img_list):
             logger.warning(f'{img_file=}')
-            image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-            image_raw = toBGR(image_raw)
-            ih, iw = image_raw.shape[0:2]
+            img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+            img_raw = toBGR(img_raw)
+            ih, iw = img_raw.shape[0:2]
             # ================矩形画格信息================
             frame_grid_strs = frame_data.get(img_file.name, [f'0,0,{iw},{ih}~0,0,{iw},{ih}'])
             # ================模型检测文字，文字显示为白色================
             if use_torch and CTD_model is not None:
-                CTD_mask = get_CTD_mask(image_raw)
+                CTD_mask = get_CTD_mask(img_raw)
             else:
                 CTD_mask = None
             # ================针对每一张图================
@@ -4850,8 +4686,8 @@ class MistWindow(QMainWindow):
 
         for p, img_file in enumerate(self.img_list):
             logger.warning(f'{img_file=}')
-            image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-            ih, iw = image_raw.shape[0:2]
+            img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+            ih, iw = img_raw.shape[0:2]
 
             # ================矩形画格信息================
             # 从 frame_data 中获取画格信息，默认为整个图像的矩形区域
@@ -4863,7 +4699,7 @@ class MistWindow(QMainWindow):
             # ================获取对应的文字图片================
             mask_pics = [x for x in all_masks if x.stem.startswith(img_file.stem)]
             if mask_pics:
-                single_cnts = get_single_cnts(image_raw, mask_pics)
+                single_cnts = get_single_cnts(img_raw, mask_pics)
                 logger.debug(f'{len(single_cnts)=}')
                 single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
                 ordered_cnts = list(chain(*single_cnts_grids))
@@ -5015,8 +4851,8 @@ def get_combined_mask(slice1, slice2, slice3, lower_bound, upper_bound):
 
 
 # @logger.catch
-def get_added_frames(frame_grid_strs, image_raw, color_name0):
-    image_raw = toBGR(image_raw)
+def get_added_frames(frame_grid_strs, img_raw, color_name0):
+    img_raw = toBGR(img_raw)
     directions = ['top', 'bottom', 'left', 'right']
     # 根据边框颜色获取绘制用颜色
     if color_name0 == 'white':
@@ -5037,21 +4873,21 @@ def get_added_frames(frame_grid_strs, image_raw, color_name0):
         x, y, w, h, xx, yy, ww, hh = int_values
 
         masks = {
-            'top': get_combined_mask(image_raw[yy + 2:yy + 3, xx:xx + ww],
-                                     image_raw[yy + 3:yy + 4, xx:xx + ww],
-                                     image_raw[yy + 4:yy + 5, xx:xx + ww],
+            'top': get_combined_mask(img_raw[yy + 2:yy + 3, xx:xx + ww],
+                                     img_raw[yy + 3:yy + 4, xx:xx + ww],
+                                     img_raw[yy + 4:yy + 5, xx:xx + ww],
                                      lower_bound, upper_bound),
-            'bottom': get_combined_mask(image_raw[yy + hh - 3:yy + hh - 2, xx:xx + ww],
-                                        image_raw[yy + hh - 2:yy + hh - 1, xx:xx + ww],
-                                        image_raw[yy + hh - 1:yy + hh, xx:xx + ww],
+            'bottom': get_combined_mask(img_raw[yy + hh - 3:yy + hh - 2, xx:xx + ww],
+                                        img_raw[yy + hh - 2:yy + hh - 1, xx:xx + ww],
+                                        img_raw[yy + hh - 1:yy + hh, xx:xx + ww],
                                         lower_bound, upper_bound),
-            'left': get_combined_mask(image_raw[yy:yy + hh, xx + 1:xx + 2],
-                                      image_raw[yy:yy + hh, xx + 2:xx + 3],
-                                      image_raw[yy:yy + hh, xx + 3:xx + 4],
+            'left': get_combined_mask(img_raw[yy:yy + hh, xx + 1:xx + 2],
+                                      img_raw[yy:yy + hh, xx + 2:xx + 3],
+                                      img_raw[yy:yy + hh, xx + 3:xx + 4],
                                       lower_bound, upper_bound),
-            'right': get_combined_mask(image_raw[yy:yy + hh, xx + ww - 3:xx + ww - 2],
-                                       image_raw[yy:yy + hh, xx + ww - 2:xx + ww - 1],
-                                       image_raw[yy:yy + hh, xx + ww - 1:xx + ww],
+            'right': get_combined_mask(img_raw[yy:yy + hh, xx + ww - 3:xx + ww - 2],
+                                       img_raw[yy:yy + hh, xx + ww - 2:xx + ww - 1],
+                                       img_raw[yy:yy + hh, xx + ww - 1:xx + ww],
                                        lower_bound, upper_bound)
         }
 
@@ -5073,7 +4909,7 @@ def get_added_frames(frame_grid_strs, image_raw, color_name0):
                         'left': ((xx, yy), (xx, yy + hh)),
                         'right': ((xx + ww, yy), (xx + ww, yy + hh))
                     }
-                    line(image_raw, draw_points[direction][0], draw_points[direction][1], color, 2)
+                    line(img_raw, draw_points[direction][0], draw_points[direction][1], color, 2)
                 else:
                     for offset in range(-2 if direction in ['top', 'bottom'] else -1, gap_value + 1):
                         for start, end in segments:
@@ -5083,7 +4919,7 @@ def get_added_frames(frame_grid_strs, image_raw, color_name0):
                                 'left': ((xx - offset, yy + start), (xx - offset, yy + end)),
                                 'right': ((xx + ww + offset, yy + start), (xx + ww + offset, yy + end))
                             }
-                            line(image_raw, draw_points[direction][0], draw_points[direction][1], color, 1)
+                            line(img_raw, draw_points[direction][0], draw_points[direction][1], color, 1)
 
                     # 绘制外侧扩大的矩形，考虑gaps延长线段
                     draw_points = {
@@ -5092,18 +4928,18 @@ def get_added_frames(frame_grid_strs, image_raw, color_name0):
                         'left': ((xx - gaps[2], yy - gaps[0]), (xx - gaps[2], yy + hh + gaps[1])),
                         'right': ((xx + ww + gaps[3], yy - gaps[0]), (xx + ww + gaps[3], yy + hh + gaps[1]))
                     }
-                    line(image_raw, draw_points[direction][0], draw_points[direction][1], color, 2)
-    return image_raw
+                    line(img_raw, draw_points[direction][0], draw_points[direction][1], color, 2)
+    return img_raw
 
 
 # @logger.catch
-def compute_frame_mask(image_raw, dominant_colors, tolerance):
+def compute_frame_mask(img_raw, dominant_colors, tolerance):
     masks = []
     for i, dominant_color in enumerate(dominant_colors):
         dominant_color_int32 = array(dominant_color[:3]).astype(int32)
         lower_bound = maximum(0, dominant_color_int32 - tolerance)
         upper_bound = minimum(255, dominant_color_int32 + tolerance)
-        mask = inRange(image_raw, lower_bound, upper_bound)
+        mask = inRange(img_raw, lower_bound, upper_bound)
         masks.append(mask)
     # 将多个掩码相加
     combined_mask = np.sum(masks, axis=0)
@@ -5118,44 +4954,52 @@ def compute_frame_mask(image_raw, dominant_colors, tolerance):
     return combined_mask_uint8
 
 
-# @logger.catch
-def get_proj_img(image_array, direction, target_color="black"):
+@logger.catch
+def get_proj_img(img_array, direction, target_color="black"):
     """
     根据输入的二维图像数组和投影方向，创建投影图像并返回白色像素的投影。
 
-    :param image_array: 一个表示二值化图像的二维数组，形状为 (height, width)。
+    :param img_array: 一个表示二值化图像的二维数组，形状为 (height, width)。
     :param direction: 投影方向，可以是 "horizontal" 或 "vertical"。
     :param target_color: 目标颜色，可以是 "black" 或 "white"。
     :return: 投影图像，以及一个列表，列表的每个元素是每行（或每列）的白色像素数量。
     """
-    height, width = image_array.shape[:2]
+    # 如果是PIL图像，转换为NumPy数组
+    if isinstance(img_array, Image.Image):
+        img_array = array(img_array)
+        # 如果图像有三个维度，并且颜色为三通道，则进行颜色空间的转换
+        if img_array.ndim == 3 and img_array.shape[2] == 3:
+            img_array = cvtColor(img_array, COLOR_RGB2BGR)
+
+    if len(img_array.shape) == 3:
+        # 转换为灰度
+        img_array = cvtColor(img_array, COLOR_BGR2GRAY)
+
+    height, width = img_array.shape[:2]
     is_target_black = target_color.lower() == "black"
 
     target_value = 0 if is_target_black else 255
-    image_bg_color = 255 if is_target_black else 0
-    image_fg_color = 0 if is_target_black else 255
+    img_bg_color = 255 if is_target_black else 0
+    img_fg_color = 0 if is_target_black else 255
 
     projection_data = []
     if direction.lower() == "horizontal":
         # 计算水平投影
-        projection_data = [row.count(target_value) for row in image_array.tolist()]
+        projection_data = [row.count(target_value) for row in img_array.tolist()]
         # 创建水平投影图像
-        proj_img = Image.new('L', (width, height), image_bg_color)
+        proj_pil = Image.new('L', (width, height), img_bg_color)
         for y, value in enumerate(projection_data):
             for x in range(value):
-                proj_img.putpixel((x, y), image_fg_color)
-    elif direction.lower() == "vertical":
+                proj_pil.putpixel((x, y), img_fg_color)
+    else:  # if direction.lower() == "vertical"
         # 计算垂直投影
-        projection_data = [col.count(target_value) for col in zip(*image_array.tolist())]
+        projection_data = [col.count(target_value) for col in zip(*img_array.tolist())]
         # 创建垂直投影图像
-        proj_img = Image.new('L', (width, height), image_bg_color)
+        proj_pil = Image.new('L', (width, height), img_bg_color)
         for x, value in enumerate(projection_data):
             for y in range(height - value, height):
-                proj_img.putpixel((x, y), image_fg_color)
-    else:
-        raise ValueError("Invalid projection direction")
-
-    return proj_img, projection_data
+                proj_pil.putpixel((x, y), img_fg_color)
+    return proj_pil, projection_data
 
 
 # @logger.catch
@@ -5163,11 +5007,11 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
     with_frames_jpg = img_file.parent / f'{img_file.stem}-画框.jpg'
     added_frames_jpg = auto_subdir / f'{img_file.stem}-加框.jpg'
     logger.warning(f'{img_file=}')
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-    image_formal = image_raw.copy()
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    img_formal = img_raw.copy()
     if with_frames_jpg.exists():
-        image_formal = imdecode(fromfile(with_frames_jpg, dtype=uint8), -1)
-    image_formal = toBGR(image_formal)
+        img_formal = imdecode(fromfile(with_frames_jpg, dtype=uint8), -1)
+    img_formal = toBGR(img_formal)
 
     color_name0 = 'white'
     if img_file.name in frame_data:
@@ -5175,7 +5019,7 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
     else:
         if frame_color is None:
             # 获取RGBA格式的边框像素
-            edge_pixels_rgba = get_edge_pxs(image_raw)
+            edge_pixels_rgba = get_edge_pxs(img_raw)
             # 只检查前两种主要颜色
             color_and_ratios, combined_color_and_ratios = find_dominant_colors(edge_pixels_rgba)
             dominant_color0, color_ratio0 = combined_color_and_ratios[0]
@@ -5198,9 +5042,9 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
         logger.info(imes)
 
         # 计算主要颜色遮罩
-        frame_mask = compute_frame_mask(image_formal, dominant_colors, tolerance=normal_tolerance)
-        frame_mask_white = compute_frame_mask(image_formal, [rgba_white], tolerance=white_tolerance)
-        frame_mask_black = compute_frame_mask(image_formal, [rgba_black], tolerance=black_tolerance)
+        frame_mask = compute_frame_mask(img_formal, dominant_colors, tolerance=normal_tolerance)
+        frame_mask_white = compute_frame_mask(img_formal, [rgba_white], tolerance=white_tolerance)
+        frame_mask_black = compute_frame_mask(img_formal, [rgba_black], tolerance=black_tolerance)
 
         frame_mask_group = [frame_mask]
         if check_more_frame_color:
@@ -5210,9 +5054,9 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
                 frame_mask_group.append(frame_mask_black)
 
         # 创建水平投影图像
-        hori_proj_frame_mask, hori_proj_data = get_proj_img(frame_mask, 'horizontal', 'white')
+        hori_proj_bi, hori_proj_data = get_proj_img(frame_mask, 'horizontal', 'white')
         # 创建垂直投影图像
-        ver_proj_frame_mask, ver_proj_data = get_proj_img(frame_mask, 'vertical', 'white')
+        ver_proj_bi, ver_proj_data = get_proj_img(frame_mask, 'vertical', 'white')
 
         if frame_color is not None:
             thres = 300
@@ -5231,13 +5075,13 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
             frame_mask_png = current_dir / 'frame_mask.png'
             frame_mask_white_png = current_dir / 'frame_mask_white.png'
             frame_mask_black_png = current_dir / 'frame_mask_black.png'
-            hori_proj_frame_mask_png = current_dir / 'hori_proj_frame_mask.png'
-            ver_proj_frame_mask_png = current_dir / 'ver_proj_frame_mask.png'
+            hori_proj_frame_mask_png = current_dir / 'hori_proj_bi.png'
+            ver_proj_frame_mask_png = current_dir / 'ver_proj_bi.png'
             write_pic(frame_mask_png, frame_mask)
             write_pic(frame_mask_white_png, frame_mask_white)
             write_pic(frame_mask_black_png, frame_mask_black)
-            write_pic(hori_proj_frame_mask_png, hori_proj_frame_mask)
-            write_pic(ver_proj_frame_mask_png, ver_proj_frame_mask)
+            write_pic(hori_proj_frame_mask_png, hori_proj_bi)
+            write_pic(ver_proj_frame_mask_png, ver_proj_bi)
 
         grids = get_grids(frame_mask_group, media_type)
         frame_grid_strs = [rect.frame_grid_str for rect in grids]
@@ -5247,13 +5091,13 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
     grid_masks, marked_frames = get_grid_masks(img_file, frame_grid_strs)
 
     if do_add_frame:
-        added_frames = get_added_frames(frame_grid_strs, image_raw, color_name0)
+        added_frames = get_added_frames(frame_grid_strs, img_raw, color_name0)
         write_pic(added_frames_jpg, added_frames)
     return img_file, frame_grid_strs
 
 
 # @timer_decorator
-def step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, image_inds):
+def step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, img_inds):
     """
     分析画格，获取画格的位置和尺寸，将结果保存到YAML文件中。
 
@@ -5263,15 +5107,15 @@ def step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, image_i
     # 这是一个用于分析图像画格并将结果保存到YAML文件中的Python函数。该函数以YAML文件路径作为输入，并在存在YAML文件时加载YAML文件中的数据。然后，它会分析给定图像列表中的每个图像，并将画格的位置和尺寸保存为字符串列表，并将其保存到YAML文件中。
     # 每个图像的分析包括找到画格边缘像素的主要颜色，根据主要颜色计算遮罩，并使用遮罩将画格分成子矩形。然后，函数将每个子矩形的位置和大小保存为字符串列表中的元素。
     # 如果某个图像中有两个或更多的子矩形，则函数可以使用get_marked_frames函数对其进行标记，但是此部分代码目前被注释掉了。
-    # 最后，函数将image_data字典按图像文件名排序，并将排序后的字典保存到YAML文件中。
+    # 最后，函数将img_data字典按图像文件名排序，并将排序后的字典保存到YAML文件中。
     img_list = get_valid_imgs(img_folder)
     # ================加载YAML文件================
     frame_data = iload_data(frame_yml)
 
-    if image_inds:
-        image_list_roi = [img_list[i] for i in image_inds]
-        # 从image_data中移除这些图像的数据，以便后面重新生成
-        for image in image_list_roi:
+    if img_inds:
+        img_list_roi = [img_list[i] for i in img_inds]
+        # 从img_data中移除这些图像的数据，以便后面重新生成
+        for image in img_list_roi:
             frame_data.pop(image.name, None)
     # ================分析画格================
     if thread_method == 'queue':
@@ -5399,7 +5243,7 @@ def get_textblocks(letter_in_contour, media_type, f=None):
     letter_cnts = []
     if f is None and not color_input:
         # ================无框================
-        letter_contours, letter_hierarchy = findContours(letter_in_contour, RETR_LIST, CHAIN_APPROX_SIMPLE)
+        letter_contours, letter_hier = findContours(letter_in_contour, RETR_LIST, CHAIN_APPROX_SIMPLE)
         logger.debug(f'{len(letter_contours)=}')
         for l in range(len(letter_contours)):
             letter_contour = letter_contours[l]
@@ -5417,7 +5261,7 @@ def get_textblocks(letter_in_contour, media_type, f=None):
                 logger.debug(f"{letter_cnt=}")
                 raw_letter_cnts.append(letter_cnt)
     else:
-        letter_contours, letter_hierarchy = findContours(letter_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+        letter_contours, letter_hier = findContours(letter_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
         for l in range(len(letter_contours)):
             letter_contour = letter_contours[l]
             letter_cnt = Contr(letter_contour)
@@ -5440,7 +5284,7 @@ def get_textblocks(letter_in_contour, media_type, f=None):
     letter_cnts4words.sort(key=lambda x: (x.br_x, x.br_y))
     if use_dilate:
         word_in_contour = dilate(letter_in_contour, kernal_word, iterations=1)
-        word_contours, word_hierarchy = findContours(word_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+        word_contours, word_hier = findContours(word_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
         if do_dev_pic:
             if f is not None:
                 word_in_contour_png = current_dir / f'letter_in_contour_{f}_dilated.png'
@@ -5704,7 +5548,7 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
         preview_canvas = circle(preview_canvas, pt2tup(textblock.block_poly.centroid), 5, color_green, -1)
         preview_canvas = drawContours(preview_canvas, [textblock.block_contour], 0, color_olive, 1)
 
-    split_preview = deepcopy(preview_canvas)
+    split_preview = preview_canvas.copy()
     for i in range(len(textblocks) - 1):
         textblock_comb = textblocks[i:i + 2]
         # 使用针转切割
@@ -5819,7 +5663,7 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
         else:
             logger.error(f'{coords_list=}')
             # 生成示意图
-            error_preview = deepcopy(preview_canvas)
+            error_preview = preview_canvas.copy()
             # 保存示意图
             error_preview_png = current_dir / 'error_preview.png'
             write_pic(error_preview_png, error_preview)
@@ -5981,11 +5825,11 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
 
     added_frames_jpg = img_file.parent / f'{img_file.stem}-加框.jpg'
     ctd_png = auto_subdir / f'{img_file.stem}-CTD.png'
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
     if added_frames_jpg.exists():
-        image_raw = imdecode(fromfile(added_frames_jpg, dtype=uint8), -1)
-    image_raw = toBGR(image_raw)
-    ih, iw = image_raw.shape[0:2]
+        img_raw = imdecode(fromfile(added_frames_jpg, dtype=uint8), -1)
+    img_raw = toBGR(img_raw)
+    ih, iw = img_raw.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
 
     cp_bubble, cp_letter = color_pattern
@@ -6005,20 +5849,20 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
     else:
         # 文字为单色
         color_letter = Color(cp_letter)
-    letter_mask = color_letter.get_range_img(image_raw)
+    letter_mask = color_letter.get_range_img(img_raw)
 
     if color_bubble is None:
         # ================排除已经识别的气泡================
         mask_pics = [x for x in all_masks if x.stem.startswith(img_file.stem)]
         if mask_pics:
-            single_cnts = get_single_cnts(image_raw, mask_pics)
+            single_cnts = get_single_cnts(img_raw, mask_pics)
             bubble_contours = [x.contour for x in single_cnts]
             ready_bubble_mask = drawContours(black_bg.copy(), bubble_contours, -1, 255, FILLED)
             dilated_mask = dilate(ready_bubble_mask, kernel5, iterations=1)
             dilated_mask_inv = bitwise_not(dilated_mask)
             letter_mask = bitwise_and(letter_mask, dilated_mask_inv)
         if use_torch and CTD_model is not None:
-            CTD_mask = get_CTD_mask(image_raw)
+            CTD_mask = get_CTD_mask(img_raw)
             # 将comictextdetector_mask中大于或等于127的部分设置为255，其余部分设置为0
             ret, CTD_mask = threshold(CTD_mask, 127, 255, THRESH_BINARY)
             letter_mask = bitwise_and(letter_mask, CTD_mask)
@@ -6032,10 +5876,10 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
         cp_mask_cnt_png = auto_subdir / f'{img_file.stem}-Mask-{color_letter.rgb_str}-{color_letter.color_name}.png'
     else:
         if color_bubble.type == 'Color':
-            bubble_mask = color_bubble.get_range_img(image_raw)
+            bubble_mask = color_bubble.get_range_img(img_raw)
             left_sample, right_sample = None, None
         else:  # ColorGradient
-            img_tuple = color_bubble.get_range_img(image_raw)
+            img_tuple = color_bubble.get_range_img(img_raw)
             bubble_mask, left_sample, right_sample = img_tuple
 
         if do_dev_pic:
@@ -6048,7 +5892,7 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
         cp_mask_cnt_png = auto_subdir / f'{img_file.stem}-Mask-{color_bubble.rgb_str}-{color_bubble.color_name}~{color_letter.rgb_str}-{color_letter.color_name}.png'
 
         filter_cnts = get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mask)
-        colorful_raw_bubbles = get_colorful_bubbles(image_raw, filter_cnts)
+        colorful_raw_bubbles = get_colorful_bubbles(img_raw, filter_cnts)
         # ================切割相连气泡================
         single_cnts, all_textblocks = seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type)
         # ================通过画格重新排序气泡框架================
@@ -6094,12 +5938,12 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
     if CTD_mask is not None:
         write_pic(ctd_png, CTD_mask)
     if len(ordered_cnts) >= 1:
-        colorful_single_bubbles = get_colorful_bubbles(image_raw, ordered_cnts)
-        textblock_bubbles = get_textblock_bubbles(image_raw, all_textblocks)
+        colorful_single_bubbles = get_colorful_bubbles(img_raw, ordered_cnts)
+        textblock_bubbles = get_textblock_bubbles(img_raw, all_textblocks)
 
         # 创建一个带有bg_alpha透明度原图背景的图像
         transparent_img = zeros((ih, iw, 4), dtype=uint8)
-        transparent_img[..., :3] = image_raw
+        transparent_img[..., :3] = img_raw
         transparent_img[..., 3] = int(255 * bg_alpha)
         # 在透明图像上绘制contours，每个contour使用不同颜色
 
@@ -6121,14 +5965,14 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
 @logger.catch
 def analyze1pic(img_file, frame_data, color_patterns, media_type, auto_subdir):
     logger.warning(f'{img_file=}')
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-    image_raw = toBGR(image_raw)
-    ih, iw = image_raw.shape[0:2]
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    img_raw = toBGR(img_raw)
+    ih, iw = img_raw.shape[0:2]
     # ================矩形画格信息================
     frame_grid_strs = frame_data.get(img_file.name, [f'0,0,{iw},{ih}~0,0,{iw},{ih}'])
     # ================模型检测文字，文字显示为白色================
     if use_torch and CTD_model is not None:
-        CTD_mask = get_CTD_mask(image_raw)
+        CTD_mask = get_CTD_mask(img_raw)
     else:
         CTD_mask = None
     # ================针对每一张图================
@@ -6174,15 +6018,15 @@ def step1_analyze_bubbles(img_folder, media_type, auto_subdir):
 
 # @logger.catch
 # @timer_decorator
-def get_single_cnts(image_raw, mask_pics):
+def get_single_cnts(img_raw, mask_pics):
     """
     从原始图像和对应的掩码图像中提取单个气泡的轮廓及其裁剪后的图像。
 
-    :param image_raw: 原始图像，通常为漫画或其他带文字的图像。
+    :param img_raw: 原始图像，通常为漫画或其他带文字的图像。
     :param mask_pics: 包含掩码图像的列表，这些掩码用于在原始图像中找到气泡。
     :return 单个气泡轮廓及其裁剪后的图像的列表
     """
-    ih, iw = image_raw.shape[0:2]
+    ih, iw = img_raw.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
     single_cnts = []
 
@@ -6217,12 +6061,12 @@ def get_single_cnts(image_raw, mask_pics):
         elif isinstance(cp_bubble, list):
             # 气泡为渐变色
             color_bubble = ColorGradient(cp_bubble)
-            img_tuple = color_bubble.get_range_img(image_raw)
+            img_tuple = color_bubble.get_range_img(img_raw)
             bubble_mask, left_sample, right_sample = img_tuple
         else:
             # 气泡为单色
             color_bubble = Color(cp_bubble)
-            bubble_mask = color_bubble.get_range_img(image_raw)
+            bubble_mask = color_bubble.get_range_img(img_raw)
 
         if isinstance(cp_letter, list):
             # 文字为双色
@@ -6230,7 +6074,7 @@ def get_single_cnts(image_raw, mask_pics):
         else:
             # 文字为单色
             color_letter = Color(cp_letter)
-        letter_mask = color_letter.get_range_img(image_raw)
+        letter_mask = color_letter.get_range_img(img_raw)
 
         # ================获取对应的气泡文字蒙版================
         for c, contour in enumerate(contour_list):
@@ -6241,10 +6085,10 @@ def get_single_cnts(image_raw, mask_pics):
                 bit_white_bubble_inv = bitwise_not(bit_white_bubble)
 
                 # 获取原始图像在bit_white_bubble范围内的图像，其他部分为气泡颜色
-                image_bubble_only = bitwise_and(image_raw, image_raw, mask=bit_white_bubble)
+                img_bubble_only = bitwise_and(img_raw, img_raw, mask=bit_white_bubble)
                 if color_bubble is not None:
-                    image_bubble_only[bit_white_bubble == 0] = color_bubble.rgb
-                image_bubble_only_inv = bitwise_not(image_bubble_only)
+                    img_bubble_only[bit_white_bubble == 0] = color_bubble.rgb
+                img_bubble_only_inv = bitwise_not(img_bubble_only)
 
                 # 获取气泡内的文字
                 letter_in_bubble = bitwise_and(letter_mask, letter_mask, mask=bit_white_bubble)
@@ -6286,20 +6130,20 @@ def get_single_cnts(image_raw, mask_pics):
                             mod_img = letter_in_bubble_inv.copy()
                         elif color_letter.rgb_str == '000000':
                             # 文字颜色为黑色
-                            mod_img = image_bubble_only.copy()
+                            mod_img = img_bubble_only.copy()
                         else:
                             mod_img = letter_in_bubble_inv.copy()
                     else:
                         # 从带有白色背景的图像中裁剪出带有padding的矩形区域
                         if color_bubble.rgb_str == 'ffffff':
                             # 气泡颜色为白色则使用原图
-                            mod_img = image_bubble_only.copy()
+                            mod_img = img_bubble_only.copy()
                         elif color_bubble.rgb_str == '000000':
                             # 气泡颜色为黑色则使用原图反色
-                            mod_img = image_bubble_only_inv.copy()
+                            mod_img = img_bubble_only_inv.copy()
                         elif color_letter.rgb_str == 'ffffff':
                             # 文字颜色为白色则使用原图反色把气泡颜色替换为白色后的转换成的灰度图
-                            mod_img = image_bubble_only_inv.copy()
+                            mod_img = img_bubble_only_inv.copy()
                             mod_img[bubble_mask == 255] = color_white
                             mod_img[bit_white_bubble_inv == 255] = color_white
                             if do_dev_pic:
@@ -6307,7 +6151,7 @@ def get_single_cnts(image_raw, mask_pics):
                                 write_pic(mod_img_png, mod_img)
                         elif color_letter.rgb_str == '000000':
                             # 文字颜色为黑色则使用原图把气泡颜色替换为白色后的转换成的灰度图
-                            mod_img = image_bubble_only.copy()
+                            mod_img = img_bubble_only.copy()
                             mod_img[bubble_mask == 255] = color_white
                             mod_img[bit_white_bubble_inv == 255] = color_white
                         else:
@@ -6417,11 +6261,11 @@ def get_grid_masks(img_file, frame_grid_strs):
     pic_div_psd = img_folder / f'{img_file.stem}-分框.psd'
     marked_frames_jpg = auto_subdir / f'{img_file.stem}-画格.jpg'
 
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-    panel_pil = fromarray(cvtColor(image_raw, COLOR_BGR2RGB))
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    panel_pil = fromarray(cvtColor(img_raw, COLOR_BGR2RGB))
     panel_draw = ImageDraw.Draw(panel_pil, 'RGBA')
 
-    ih, iw = image_raw.shape[0:2]
+    ih, iw = img_raw.shape[0:2]
     black_bg = zeros((ih, iw), uint8)
     logger.warning(f'{frame_grid_strs=}')
 
@@ -6579,7 +6423,7 @@ def ocr_by_tesseract(image, media_lang, vert=False):
         config += " -c textord_old_baselines=0"
     data = image_to_data(image, config=config, output_type='dict')
     # 将各个键的值组合成元组
-    tess_zipped_data = zip(
+    tess_zdata = zip(
         data['level'],
         data['page_num'],
         data['block_num'],
@@ -6593,13 +6437,14 @@ def ocr_by_tesseract(image, media_lang, vert=False):
         data['conf'],
         data['text']
     )
-    return list(tess_zipped_data)
+    return list(tess_zdata)
 
 
 # @logger.catch
 def ocr_by_vision(image, media_lang):
     languages = [vision_language_options[media_lang]]  # 设置需要识别的语言
 
+    image = conv_img(image, target_format='CV')
     height, width = image.shape[:2]
     image_data = image.tobytes()
     provider = CGDataProviderCreateWithData(None, image_data, len(image_data), None)
@@ -6611,7 +6456,6 @@ def ocr_by_vision(image, media_lang):
     request = VNRecognizeTextRequest.new()
     # 使用快速识别（0-快速，1-精确）
     request.setRecognitionLevel_(0)
-    # 使用精确识别（0-快速，1-精确）
     # request.setRecognitionLevel_(1)
     request.setUsesLanguageCorrection_(True)  # 使用语言纠正
     request.setRecognitionLanguages_(languages)  # 设置识别的语言
@@ -6640,6 +6484,31 @@ def ocr_by_vision(image, media_lang):
     else:
         print("Error: ", error)
         return []
+
+
+async def recognize_text(img, lang):
+    image_pil = fromarray(cvtColor(img, COLOR_BGR2RGB))
+    result = await recognize_pil(image_pil, lang)
+    return result
+
+
+def ocr_by_winocr(img, media_lang):
+    lang = winocr_language_options[media_lang]
+    image_pil = fromarray(cvtColor(img, COLOR_BGR2RGB))
+    result = asyncio.run(recognize_text(img, lang))
+    text_results = []
+    for l in range(len(result.lines)):
+        line = result.lines[l]
+        for w in range(len(line.words)):
+            word = line.words[w]
+            x = word.bounding_rect.x
+            y = word.bounding_rect.y
+            width = word.bounding_rect.width
+            height = word.bounding_rect.height
+            # print(f'[{x}, {y}, {width}, {height}]{word.text}')
+            tup = (x, y, width, height, l, w, word.text)
+            text_results.append(tup)
+    return text_results
 
 
 # @logger.catch
@@ -6830,8 +6699,8 @@ def get_new_grids(single_cnts_grids):
 # @logger.catch
 @timer_decorator
 def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type):
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-    ih, iw = image_raw.shape[0:2]
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    ih, iw = img_raw.shape[0:2]
     black_bg = zeros((ih, iw), uint8)
 
     if media_type == 'Manga':
@@ -6961,8 +6830,8 @@ def order1pic(img_folder, i, media_type):
     img_file = img_list[i]
     logger.warning(f'{img_file=}')
     order_preview_jpg = auto_subdir / f'{img_file.stem}-气泡排序.jpg'
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-    ih, iw = image_raw.shape[0:2]
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    ih, iw = img_raw.shape[0:2]
 
     # ================矩形画格信息================
     # 从 frame_data 中获取画格信息，默认为整个图像的矩形区域
@@ -6978,16 +6847,16 @@ def order1pic(img_folder, i, media_type):
         sd_img_list = get_valid_imgs(sd_img_folder)
         sd_order_yml = img_folder.parent / f'{sd_img_folder.name}-气泡排序.yml'
         sd_order_data = iload_data(sd_order_yml)
-        sd_image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+        sd_img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
         if i <= len(sd_img_list):
             sd_img_file = sd_img_list[i]
             sd_bubble_order_strs = sd_order_data.get(sd_img_file.name, [])
-            sd_image_raw = imdecode(fromfile(sd_img_file, dtype=uint8), -1)
-        sd_ih, sd_iw = sd_image_raw.shape[0:2]
+            sd_img_raw = imdecode(fromfile(sd_img_file, dtype=uint8), -1)
+        sd_ih, sd_iw = sd_img_raw.shape[0:2]
 
     ordered_cnts = []
     if mask_pics:
-        single_cnts = get_single_cnts(image_raw, mask_pics)
+        single_cnts = get_single_cnts(img_raw, mask_pics)
         logger.debug(f'{len(single_cnts)=}')
         single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
         ordered_cnts = list(chain(*single_cnts_grids))
@@ -7034,11 +6903,11 @@ def order1pic(img_folder, i, media_type):
 @timer_decorator
 def get_order_preview(marked_frames, single_cnts_grids):
     ordered_cnts = list(chain(*single_cnts_grids))
-    image_pil = fromarray(cvtColor(marked_frames, COLOR_BGR2RGB))
+    img_pil = fromarray(cvtColor(marked_frames, COLOR_BGR2RGB))
     # 创建与原图大小相同的透明图像
-    bubble_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-    core_br_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-    line_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
+    bubble_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+    core_br_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+    line_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
     bubble_draw = ImageDraw.Draw(bubble_overlay)
     core_br_draw = ImageDraw.Draw(core_br_overlay)
     line_draw = ImageDraw.Draw(line_overlay)
@@ -7092,12 +6961,12 @@ def get_order_preview(marked_frames, single_cnts_grids):
                     line_draw.line([prev_cnt.cxy, bubble_cnt.cxy], fill=line_color, width=5)
 
     # 将带有半透明颜色轮廓的透明图像与原图混合
-    image_pil.paste(bubble_overlay, mask=bubble_overlay)
-    image_pil.paste(core_br_overlay, mask=core_br_overlay)
-    image_pil.paste(line_overlay, mask=line_overlay)
+    img_pil.paste(bubble_overlay, mask=bubble_overlay)
+    img_pil.paste(core_br_overlay, mask=core_br_overlay)
+    img_pil.paste(line_overlay, mask=line_overlay)
 
     # 将 PIL 图像转换回 OpenCV 图像
-    blended_img = cvtColor(array(image_pil), COLOR_RGB2BGR)
+    blended_img = cvtColor(array(img_pil), COLOR_RGB2BGR)
     return blended_img
 
 
@@ -7129,66 +6998,18 @@ def step2_order(img_folder, media_type):
         pickle.dump(cnts_dic, f)
 
 
-def get_line_imgs(cropped_img, c):
-    gray_cropped_img = cvtColor(cropped_img, COLOR_BGR2GRAY)
-    # 二值化图像
-    ret, mask_img = threshold(gray_cropped_img, 127, 255, THRESH_BINARY)
-    # 创建水平投影图像
-    hori_proj_pil, hori_proj_data = get_proj_img(mask_img, 'horizontal')
-    # 创建垂直投影图像
-    ver_proj_pil, ver_proj_data = get_proj_img(mask_img, 'vertical')
-
-    if do_dev_pic:
-        cropped_img_png = current_dir / f'cropped_img_{c}.png'
-        mask_img_png = current_dir / f'mask_img_{c}.png'
-        hori_proj_img_png = current_dir / f'hori_proj_pil_{c}.png'
-        ver_proj_img_png = current_dir / f'ver_proj_pil_{c}.png'
-        write_pic(cropped_img_png, cropped_img)
-        write_pic(mask_img_png, mask_img)
-        write_pic(hori_proj_img_png, hori_proj_pil)
-        write_pic(ver_proj_img_png, ver_proj_pil)
-
-    hori_proj_black = array(hori_proj_pil)
-    hori_proj_white = bitwise_not(hori_proj_black)
-
-    projection_contours, hierarchy = findContours(hori_proj_white, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-    text_projection_cnts = []
-    for p in range(len(projection_contours)):
-        contour = projection_contours[p]
-        cnt = Contr(contour)
-        # ================对轮廓数值进行初筛================
-        condition_p1 = 100 <= cnt.area <= 1000000
-        condition_p2 = 80 <= cnt.perimeter <= 50000
-        condition_ps = [
-            condition_p1,
-            condition_p2,
-        ]
-        # logger.debug(f'{condition_ps=}, {cnt.area=:.1f}, {cnt.perimeter=:.2f}')
-        if all(condition_ps):
-            text_projection_cnts.append(cnt)
-    text_projection_cnts.sort(key=lambda x: x.br_y)
-
-    line_imgs = []
-    for t in range(len(text_projection_cnts)):
-        text_projection_cnt = text_projection_cnts[t]
-        # 获取轮廓的上下边界来提取行文字图像
-        line_img = cropped_img[text_projection_cnt.br_y - 1:text_projection_cnt.br_v + 1, :]
-        line_imgs.append(line_img)
-    return line_imgs
-
-
-def tesseract2text(tess_zipped_data):
-    tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
-    par_nums = [x[3] for x in tess_zipped_data5]
+def tesseract2text(tess_zdata):
+    tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
+    par_nums = [x[3] for x in tess_zdata5]
     par_nums = reduce_list(par_nums)
     par_nums.sort()
-    line_nums = [x[4] for x in tess_zipped_data5]
+    line_nums = [x[4] for x in tess_zdata5]
     line_nums = reduce_list(line_nums)
     line_nums.sort()
-    lines_tesseract = []
+    lines_tess = []
     for par_num in par_nums:
         for line_num in line_nums:
-            line_data = [x for x in tess_zipped_data5 if x[3] == par_num and x[4] == line_num]
+            line_data = [x for x in tess_zdata5 if x[3] == par_num and x[4] == line_num]
             line_data.sort(key=lambda x: x[5])
             for l in range(len(line_data)):
                 word_data = line_data[l]
@@ -7196,11 +7017,11 @@ def tesseract2text(tess_zipped_data):
             line_words = [x[-1] for x in line_data]
             line_text = ' '.join(line_words)
             if line_text != '':
-                lines_tesseract.append(line_text)
-    return lines_tesseract
+                lines_tess.append(line_text)
+    return lines_tess
 
 
-def get_bubble_metadata(bubble_meta_str):
+def get_bubble_meta(bubble_meta_str):
     """
     从元数据字符串中提取气泡的各项属性。
 
@@ -7259,23 +7080,48 @@ def get_bubble_metadata(bubble_meta_str):
 
 
 def get_ocr_data(ocr_engine, pic_ocr_data, img_np, media_lang, elements_num):
+    # 检查指定的OCR引擎是否已经用于当前图像
     if ocr_engine in pic_ocr_data:
-        # 已经识别过
+        # 如果已经识别过，则直接从已有数据中获取OCR结果
         ocr_results = form2data(pic_ocr_data[ocr_engine])
     else:
-        ocr_results = globals()[f'ocr_by_{ocr_engine.lower()}'](img_np, media_lang)
+        # 如果尚未识别，则调用相应的OCR引擎进行识别
+        true_engine = ocr_engine.lower()
+        if true_engine == 'tes':
+            true_engine = 'tesseract'
+        elif true_engine == 'vis':
+            true_engine = 'vision'
+        elif true_engine == 'win':
+            true_engine = 'winocr'
+        # ocr_by_{true_engine} 是一个函数，用于执行OCR操作
+        ocr_results = globals()[f'ocr_by_{true_engine}'](img_np, media_lang)
+
+        # 用于存储格式化后的OCR结果
         ocr_results_form = []
+
+        # 遍历识别结果
         for row in ocr_results:
-            row_nums = row[:-elements_num]
-            row_str = ','.join(map(str, row_nums))
-            text = row[-1]
-            confs = row[-elements_num:-1]
+            # 分离出数字和文本部分
+            row_nums = row[:-elements_num]  # 数字部分
+            row_str = ','.join(map(str, row_nums))  # 数字转为字符串，并用逗号连接
+            text = row[-1]  # 文本部分
+            confs = row[-elements_num:-1]  # 置信度部分
+
+            # 如果有置信度数据，则添加到字符串中
             if confs:
                 row_str += ','
                 row_str += ','.join([f'{x:.2f}' for x in confs])
+
+            # 将文本部分添加到字符串末尾
             row_str += f'|{text}'
+
+            # 将格式化的字符串添加到结果列表中
             ocr_results_form.append(row_str)
+
+        # 将格式化后的结果保存到pic_ocr_data字典中，以便以后可以直接使用
         pic_ocr_data[ocr_engine] = ocr_results_form
+
+    # 返回OCR结果和更新后的pic_ocr_data
     return ocr_results, pic_ocr_data
 
 
@@ -7338,33 +7184,33 @@ def correct_word(word_text):
 
 # @logger.catch
 def better_text(input_text, ocr_type):
-    text_format = input_text.strip()
+    fmt_text = input_text.strip()
     # 根据替换规则表进行替换
     for old, new in replace_rules.items():
-        text_format = text_format.replace(old, new)
+        fmt_text = fmt_text.replace(old, new)
     # ================处理省略号================
-    text_format = sub(r'(\. ?){2,}', '…', text_format)
-    text_format = sub(r'-{3,}', '--', text_format)
+    fmt_text = sub(r'(\. ?){2,}', '…', fmt_text)
+    fmt_text = sub(r'-{3,}', '--', fmt_text)
     # ================处理引号================
     for old, new in replacements.items():
-        text_format = text_format.replace(old, new)
+        fmt_text = fmt_text.replace(old, new)
     # ================多个0改成多个O================
-    text_format = sub(r'0{3,}', lambda x: 'O' * len(x.group()), text_format)
+    fmt_text = sub(r'0{3,}', lambda x: 'O' * len(x.group()), fmt_text)
     # ================处理有缩写符号的词================
     for old, new in better_abbrs.items():
         if old == "15":
-            text_format = re.sub(r'\b15\b(?!\s*percent\b)', new, text_format, flags=IGNORECASE)
+            fmt_text = re.sub(r'\b15\b(?!\s*percent\b)', new, fmt_text, flags=IGNORECASE)
         else:
-            text_format = re.sub(r'\b' + old + r'\b', new, text_format)
+            fmt_text = re.sub(r'\b' + old + r'\b', new, fmt_text)
 
     letters = [char for char in input_text if char.isalpha()]
-    up_ratio = get_upper_ratio(text_format)
+    up_ratio = get_upper_ratio(fmt_text)
     check_upper = False
     if up_ratio > 0.5 and len(letters) >= 6:
         check_upper = True
 
     if ocr_type in ['tesseract', 'vision', 'baidu', 'baidu_accu']:
-        lines = text_format.splitlines()
+        lines = fmt_text.splitlines()
         processed_lines = []
         for l in range(len(lines)):
             line = lines[l]
@@ -7393,22 +7239,22 @@ def better_text(input_text, ocr_type):
             else:
                 line = sub(r'\b\w+\b', '', line)
             processed_lines.append(line)
-        text_format = lf.join(processed_lines)
+        fmt_text = lf.join(processed_lines)
 
     # ================处理标点格式================
     # 确保"…"前后没有空格或特殊字符
-    text_format = sub(r' +… +| +…|… +', '…', text_format)
-    text_format = sub(r'-+…|…-+|\*+…|…\*+', '…', text_format)
+    fmt_text = sub(r' +… +| +…|… +', '…', fmt_text)
+    fmt_text = sub(r'-+…|…-+|\*+…|…\*+', '…', fmt_text)
     # 确保"-"前后没有空格
-    text_format = sub(r'- +| +-', '-', text_format)
+    fmt_text = sub(r'- +| +-', '-', fmt_text)
     # 其他替换
-    text_format = sub(r' *• *', ' ', text_format)
-    text_format = sub(r' +([?!.,])', r'\1', text_format)
+    fmt_text = sub(r' *• *', ' ', fmt_text)
+    fmt_text = sub(r' +([?!.,])', r'\1', fmt_text)
     # 在标点后的单词前添加空格
-    text_format = sub(r'([?!.,])(?![0-9])(\w)', r'\1 \2', text_format)
-    text_format = text_format.replace('#$0%', '#$@%')
-    text_format = text_format.replace('D. C.', 'D.C.')
-    return text_format
+    fmt_text = sub(r'([?!.,])(?![0-9])(\w)', r'\1 \2', fmt_text)
+    fmt_text = fmt_text.replace('#$0%', '#$@%')
+    fmt_text = fmt_text.replace('D. C.', 'D.C.')
+    return fmt_text
 
 
 def find_punct(text):
@@ -7420,46 +7266,6 @@ def find_punct(text):
     if start_p == '. ':
         start_p = '…'
     return start_p, end_p
-
-
-def better_apostrophe(text):
-    """
-    优化文本中的撇号（apostrophe）使用。
-    """
-    # 将文本合并为单行
-    merged_text = ' '.join(text.splitlines())
-
-    # 使用Spacy进行自然语言处理
-    doc = nlp(merged_text)
-
-    # 记录需要插入撇号的位置
-    insert_positions = []
-
-    for i, token in enumerate(doc):
-        ori_text = token.text  # 原始词文本
-        lower_text = ori_text.lower()  # 转换为小写
-        next_token = doc[i + 1] if i + 1 < len(doc) else None  # 获取下一个词（如果存在）
-
-        if lower_text == "worlds":
-            # 处理 "worlds" 和 "world's"
-            has_noun_child = any(child.pos_ == "NOUN" for child in token.children)  # 检查是否有名词子节点
-            if has_noun_child or (next_token and (next_token.pos_ == "VERB" or next_token.pos_ == "NOUN")):
-                matches = [m.end() for m in finditer(r'\b' + escape(ori_text) + r'\b', text)]
-                if matches:
-                    closest_match = min(matches, key=lambda x: abs(x - token.idx))
-                    insert_positions.append(closest_match - 1)
-        elif lower_text == "its":
-            # 处理 "its" 和 "it's"
-            if next_token and (next_token.pos_ == "VERB" and next_token.lemma_ not in ["be", "have"]):
-                matches = [m.end() for m in finditer(r'\b' + escape(ori_text) + r'\b', text)]
-                if matches:
-                    closest_match = min(matches, key=lambda x: abs(x - token.idx))
-                    insert_positions.append(closest_match - 1)
-
-    # 根据之前的判断结果，在正确的位置插入撇号
-    for pos in reversed(insert_positions):  # 从后往前插入，以避免影响位置
-        text = text[:pos] + "'" + text[pos:]
-    return text
 
 
 def is_valid_tense(word):
@@ -7708,11 +7514,11 @@ def fix_w_tess(text1, text2):
     return new_text1
 
 
-def better_punct(vision_text_format, refer_ocrs):
-    """优化 vision_text_format 文本"""
+def better_punct(vision_fmt_text, refer_ocrs):
+    """优化 vision_fmt_text 文本"""
 
     # 计算文本中的单词数量
-    word_count = len(list(finditer(r'\b\w+\b', vision_text_format)))
+    word_count = len(list(finditer(r'\b\w+\b', vision_fmt_text)))
 
     start_puncts = []
     end_puncts = []
@@ -7733,49 +7539,50 @@ def better_punct(vision_text_format, refer_ocrs):
     common_start = [k for k, v in start_counter.items() if v >= 2]
     common_end = [k for k, v in end_counter.items() if v >= 2]
 
-    # 获取 vision_text_format 的段首和段尾标点
-    vision_start, vision_end = find_punct(vision_text_format)
+    # 获取 vision_fmt_text 的段首和段尾标点
+    vision_start, vision_end = find_punct(vision_fmt_text)
 
     # 如果 vision 的段首标点不在共同段首标点中，则替换
     if vision_start not in common_start and common_start:
-        vision_text_format = common_start[0] + vision_text_format[len(vision_start):]
+        vision_fmt_text = common_start[0] + vision_fmt_text[len(vision_start):]
 
     certains = ['to be continued']
     # 如果 vision 的段尾标点不在共同段尾标点中，则替换
     if vision_end:
         if vision_end not in common_end and common_end:
-            vision_text_format = vision_text_format[:-len(vision_end)] + common_end[0]
+            vision_fmt_text = vision_fmt_text[:-len(vision_end)] + common_end[0]
     else:
         if common_end:
-            vision_text_format += common_end[0]
+            vision_fmt_text += common_end[0]
         else:
             # 如果没有共同的段尾标点，添加最长的段尾标点
             longest_end_punct = max(end_puncts, key=len, default='')
             if longest_end_punct:
-                vision_text_format += longest_end_punct
-            elif vision_text_format.lower().endswith(interjections):
+                vision_fmt_text += longest_end_punct
+            elif vision_fmt_text.lower().endswith(interjections):
                 # 语气词
                 pass
-            elif vision_text_format.lower() in certains:
+            elif vision_fmt_text.lower() in certains:
                 # 未完待续等特殊段落
                 pass
             elif word_count >= 8:
                 # 如果单词数量大于或等于8，添加句号
-                vision_text_format += '.'
+                vision_fmt_text += '.'
 
     if end_counter['-'] >= 1 and end_counter['--'] >= 1:
-        vision_text_format = vision_text_format.rstrip('-') + '--'
+        vision_fmt_text = vision_fmt_text.rstrip('-') + '--'
 
     # 如果文本以逗号结尾，替换为句号
-    vision_text_format = sub(r',$', '.', vision_text_format)
-    vision_text_format = vision_text_format.replace('…,', '…')
-    tesseract_text_format = refer_ocrs[-1]
-    if '¿' in vision_text_format:
-        vision_text_format = tesseract_text_format
-    vision_text_format = sub(r'\'OR', 'OR', vision_text_format)
-    return vision_text_format
+    vision_fmt_text = sub(r',$', '.', vision_fmt_text)
+    vision_fmt_text = vision_fmt_text.replace('…,', '…')
+    tess_fmt_text = refer_ocrs[-1]
+    if '¿' in vision_fmt_text:
+        vision_fmt_text = tess_fmt_text
+    vision_fmt_text = sub(r'\'OR', 'OR', vision_fmt_text)
+    return vision_fmt_text
 
 
+@logger.catch
 def run2ansi(run):
     text = run.text
     if text.strip() == '':
@@ -7806,15 +7613,202 @@ def get_dst_font_size(src_font_size, bubble_color_str, letter_color_str):
     return int(dst_font_size)
 
 
-# @logger.catch
+@logger.catch
+def draw_para(img_tups, ocr_tups, page_ind, bubble_ind):
+    img_np, gray_limg = img_tups
+    tess_zdata, tes_zdata, rec_results_vision, rec_results_vis, rec_results_winocr, rec_results_win = ocr_tups
+
+    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
+    white_bg = ones((nh, nw, 3), dtype=uint8) * 255
+    black_bg = zeros((nh, nw), dtype=uint8)
+
+    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+    ret, img_bi = threshold(img_gray, 127, 255, THRESH_BINARY)
+    # 白色二值化文字
+    img_bi_inv = bitwise_not(img_bi)
+    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+
+    gh, gw = gray_limg.shape[:2]
+    limg_pil = fromarray(cvtColor(gray_limg, COLOR_BGR2RGB))
+
+    # 创建一个新的大图像来容纳六个子图像
+    combined_img = Image.new('RGBA', (nw * 2, nh * 3 + 2 * gh), rgba_white)
+    proj_img = Image.new('RGBA', (nw * 2, nh * 2), rgba_white)
+
+    combined_img.paste(img_pil, (0, 0))
+    proj_img.paste(img_pil, (0, nh))
+    proj_img.paste(img_bi_pil, (nw, 0))
+
+    tess_zdata4 = [x for x in tess_zdata if x[0] == 4]
+    tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
+    tes_zdata4 = [x for x in tes_zdata if x[0] == 4]
+    tes_zdata5 = [x for x in tes_zdata if x[0] == 5]
+
+    cp_bubble_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}.jpg'
+    cp_br_tess_word_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_word.jpg'
+    cp_br_tes_word_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tes_word.jpg'
+    cp_br_tess_line_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_line.jpg'
+    cp_br_tes_line_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tes_line.jpg'
+    cp_br_vision_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_vision.jpg'
+    cp_br_vis_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_vis.jpg'
+    cp_br_winocr_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_winocr.jpg'
+    cp_br_win_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_win.jpg'
+    cp_br_textword_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textword.jpg'
+    cp_br_textline_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textline.jpg'
+    combined_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_combined.jpg'
+    write_pic(cp_bubble_jpg, img_np)
+
+    # ================vision坐标绘制================
+    if rec_results_vision:
+        br_vision_img_pil = img_pil.convert("RGBA")
+        br_vision_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+        br_vision_draw = ImageDraw.Draw(br_vision_overlay)
+        for r in range(len(rec_results_vision)):
+            rec_result = rec_results_vision[r]
+            vx, vy, vw, vh, vconf, text_seg = rec_result
+            br_vision_draw.rectangle([(vx, nh - vy - vh), (vx + vw, nh - vy)], outline=trans_olive, width=1)
+        br_vision_img_pil.paste(br_vision_overlay, mask=br_vision_overlay)
+        # write_pic(cp_br_vision_jpg, br_vision_img_pil)
+        combined_img.paste(br_vision_img_pil, (nw, 0))
+
+    # ================winocr坐标绘制================
+    if rec_results_winocr:
+        br_winocr_img_pil = img_pil.convert("RGBA")
+        br_winocr_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+        br_winocr_draw = ImageDraw.Draw(br_winocr_overlay)
+        for r in range(len(rec_results_winocr)):
+            rec_result = rec_results_winocr[r]
+            wx, wy, ww, wh, l, w, word_text = rec_result
+            logger.debug(f'winocr_br: {wx}, {wy}, {ww}, {wh}')
+            br_winocr_draw.rectangle([(wx, wy), (wx + ww, wy + wh)], outline=trans_olive, width=1)
+        br_winocr_img_pil.paste(br_winocr_overlay, mask=br_winocr_overlay)
+        # write_pic(cp_br_winocr_jpg, br_winocr_img_pil)
+        combined_img.paste(br_winocr_img_pil, (nw, 0))
+
+    # ================tesseract坐标绘制================
+    br_tess_word_img_pil = img_pil.convert("RGBA")
+    br_tess_word_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+    br_tess_word_draw = ImageDraw.Draw(br_tess_word_overlay)
+    for l in range(len(tess_zdata5)):
+        word_data = tess_zdata5[l]
+        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
+        br_tess_word_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
+    br_tess_word_img_pil.paste(br_tess_word_overlay, mask=br_tess_word_overlay)
+    # write_pic(cp_br_tess_word_jpg, br_tess_word_img_pil)
+
+    br_tess_line_img_pil = img_pil.convert("RGBA")
+    br_tess_line_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+    br_tess_line_draw = ImageDraw.Draw(br_tess_line_overlay)
+    for l in range(len(tess_zdata4)):
+        word_data = tess_zdata4[l]
+        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
+        br_tess_line_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
+    br_tess_line_img_pil.paste(br_tess_line_overlay, mask=br_tess_line_overlay)
+    # write_pic(cp_br_tess_line_jpg, br_tess_line_img_pil)
+
+    combined_img.paste(br_tess_word_img_pil, (0, nh))
+    combined_img.paste(br_tess_line_img_pil, (nw, nh))
+
+    # ================cv2坐标绘制================
+    rec_textblocks = get_textblocks(img_np, media_type)
+    if rec_textblocks:
+        rec_textblock = rec_textblocks[0]
+        textlines = rec_textblock.textlines
+        textwords = list(chain(*[x.textwords for x in textlines]))
+
+        br_textword_img_pil = img_pil.convert("RGBA")
+        br_textword_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+        br_textword_draw = ImageDraw.Draw(br_textword_overlay)
+        for t in range(len(textwords)):
+            textword = textwords[t]
+            br_textword_draw.rectangle([textword.left_top, textword.right_bottom], outline=trans_purple, width=1)
+        br_textword_img_pil.paste(br_textword_overlay, mask=br_textword_overlay)
+        # write_pic(cp_br_textword_jpg, br_textword_img_pil)
+
+        br_textline_img_pil = img_pil.convert("RGBA")
+        br_textline_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+        br_textline_draw = ImageDraw.Draw(br_textline_overlay)
+        for t in range(len(textlines)):
+            textline = textlines[t]
+            br_textline_draw.rectangle([textline.left_top, textline.right_bottom], outline=trans_purple, width=1)
+        br_textline_img_pil.paste(br_textline_overlay, mask=br_textline_overlay)
+        # write_pic(cp_br_textline_jpg, br_textline_img_pil)
+
+        textblock_bubbles = get_textblock_bubbles(img_np, rec_textblocks)
+        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{len(textlines)}].jpg'
+        write_pic(cp_textblock_jpg, textblock_bubbles)
+
+        combined_img.paste(br_textword_img_pil, (0, nh * 2))
+        combined_img.paste(br_textline_img_pil, (nw, nh * 2))
+
+    # ================长图tesseract坐标绘制================
+    br_tess_word_limg_pil = limg_pil.convert("RGBA")
+    br_tess_word_overlay = Image.new('RGBA', limg_pil.size, rgba_zero)
+    br_tess_word_draw = ImageDraw.Draw(br_tess_word_overlay)
+    for l in range(len(tes_zdata5)):
+        word_data = tes_zdata5[l]
+        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
+        br_tess_word_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
+    br_tess_word_limg_pil.paste(br_tess_word_overlay, mask=br_tess_word_overlay)
+    # write_pic(cp_br_tess_word_jpg, br_tess_word_limg_pil)
+
+    br_tess_line_limg_pil = limg_pil.convert("RGBA")
+    br_tess_line_overlay = Image.new('RGBA', limg_pil.size, rgba_zero)
+    br_tess_line_draw = ImageDraw.Draw(br_tess_line_overlay)
+    for l in range(len(tes_zdata4)):
+        word_data = tes_zdata4[l]
+        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
+        br_tess_line_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
+    br_tess_line_limg_pil.paste(br_tess_line_overlay, mask=br_tess_line_overlay)
+    # write_pic(cp_br_tess_line_jpg, br_tess_line_limg_pil)
+
+    combined_img.paste(br_tess_word_limg_pil, (0, 3 * nh))
+    combined_img.paste(br_tess_line_limg_pil, (nw, 3 * nh))
+
+    # ================长图vision坐标绘制================
+    if rec_results_vis:
+        br_vis_limg_pil = limg_pil.convert("RGBA")
+        br_vis_overlay = Image.new('RGBA', limg_pil.size, rgba_zero)
+        br_vis_draw = ImageDraw.Draw(br_vis_overlay)
+        for r in range(len(rec_results_vis)):
+            rec_result = rec_results_vis[r]
+            vx, vy, vw, vh, vconf, text_seg = rec_result
+            br_vis_draw.rectangle([(vx, gh - vy - vh), (vx + vw, gh - vy)], outline=trans_olive, width=1)
+        br_vis_limg_pil.paste(br_vis_overlay, mask=br_vis_overlay)
+        # write_pic(cp_br_vis_jpg, br_vis_img_pil)
+        combined_img.paste(br_vis_limg_pil, (0, 3 * nh + gh))
+
+    # ================长图winocr坐标绘制================
+    if rec_results_win:
+        br_win_limg_pil = limg_pil.convert("RGBA")
+        br_win_overlay = Image.new('RGBA', limg_pil.size, rgba_zero)
+        br_win_draw = ImageDraw.Draw(br_win_overlay)
+        for r in range(len(rec_results_win)):
+            rec_result = rec_results_win[r]
+            wx, wy, ww, wh, l, w, word_text = rec_result
+            logger.debug(f'win_br: {wx}, {wy}, {ww}, {wh}')
+            br_win_draw.rectangle([(wx, wy), (wx + ww, wy + wh)], outline=trans_olive, width=1)
+        br_win_limg_pil.paste(br_win_overlay, mask=br_win_overlay)
+        # write_pic(cp_br_win_jpg, br_win_img_pil)
+        combined_img.paste(br_win_limg_pil, (0, 3 * nh + gh))
+
+    write_pic(combined_jpg, combined_img)
+    return proj_img
+
+
+@timer_decorator
+@logger.catch
 def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert):
     logger.warning(f'{img_file=}')
     pic_results = []
     stem_tup = ('stem', img_file.stem)
     pic_results.append(stem_tup)
+    img_ind = img_list.index(img_file)
+    page_ind = img_ind
 
-    image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-    ih, iw = image_raw.shape[0:2]
+    img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+    ih, iw = img_raw.shape[0:2]
     # ================矩形画格信息================
     # 从 frame_data 中获取画格信息，默认为整个图像的矩形区域
     frame_grid_strs = frame_data.get(img_file.name, [f'0,0,{iw},{ih}~0,0,{iw},{ih}'])
@@ -7824,7 +7818,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
     # ================获取对应的文字图片================
     mask_pics = [x for x in all_masks if x.stem.startswith(img_file.stem)]
     if mask_pics:
-        single_cnts = get_single_cnts(image_raw, mask_pics)
+        single_cnts = get_single_cnts(img_raw, mask_pics)
         logger.debug(f'{len(single_cnts)=}')
 
         single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
@@ -7832,6 +7826,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
 
         for c in range(len(ordered_cnts)):
             single_cnt = ordered_cnts[c]
+            bubble_ind = c + 1
             color_pattern = single_cnt.color_pattern
             cp_bubble, cp_letter = color_pattern
             if isinstance(cp_letter, list):
@@ -7858,20 +7853,62 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
 
             img_np = single_cnt.cropped_img
             img_md5 = generate_md5(img_np)
+            # ================图像参数================
+            nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
+            white_bg = ones((nh, nw, 3), dtype=uint8) * 255
+            black_bg = zeros((nh, nw), dtype=uint8)
+
+            img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+            img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+            ret, img_bi = threshold(img_gray, 127, 255, THRESH_BINARY)
+            # 白色二值化文字
+            img_bi_inv = bitwise_not(img_bi)
+            img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+            # 将img_np中特别浅的部分变为白色
+            img_opt = img_gray.copy()
+            img_opt[img_opt >= white_thres] = 255
+
+            # ================投影================
+            hori_proj_bi, hori_proj_data = get_proj_img(img_bi_pil, 'horizontal', 'white')
+            ver_proj_bi, ver_proj_data = get_proj_img(img_bi_pil, 'vertical', 'white')
+
+            # ================绘制分行示意图================
+            line_proj_cnts, proj_mask = get_line_proj_cnts(img_np, hori_proj_bi)
+            proj_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_proj.png'
+            write_pic(proj_png, proj_mask)
+
+            img_w_lines, stitched_bi_img, gray_limg = draw_line_proj_cnts(img_np, line_proj_cnts)
+            gray_limg = cvtColor(gray_limg, COLOR_BGR2GRAY)
+            gray_limg = cvtColor(gray_limg, COLOR_GRAY2BGR)
+
+            stitched_bi_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_bi.png'
+            stitched_gray_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_gray.png'
+            textlines_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextLines[{len(line_proj_cnts)}].jpg'
+            write_pic(stitched_bi_png, stitched_bi_img)
+            write_pic(stitched_gray_png, gray_limg)
+            write_pic(textlines_jpg, img_w_lines)
+
+            # ================笔画轮廓================
+            stroke_contours, stroke_hier = findContours(img_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+            stroke_cnts = [Contr(x) for x in stroke_contours]
+            stroke_cnts = [x for x in stroke_cnts if x.area >= 1]
+            stroke_cnts.sort(key=lambda x: (x.br_x, x.br_y))
+            refer_h = get_refer_h(stroke_cnts)
+
+            # ================气泡颜色参数================
             cp_bubble, cp_letter = color_pattern
             pic_locate = f'{img_file.stem}, {c}, {img_md5}'
             pic_ocr_data = ocr_data.get(pic_locate, {})
             rec_textblocks = get_textblocks(img_np, media_type)
-            textlines = []
-            textwords = []
-            if rec_textblocks:
-                rec_textblock = rec_textblocks[0]
-                textlines = rec_textblock.textlines
-                textwords = list(chain(*[x.textwords for x in textlines]))
+
             # ================对裁剪后的图像进行文字识别================
-            tess_zipped_data, pic_ocr_data = get_ocr_data('tesseract', pic_ocr_data, img_np, media_lang, 1)
-            tess_zipped_data4 = [x for x in tess_zipped_data if x[0] == 4]
-            tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
+            tess_zdata, pic_ocr_data = get_ocr_data('tesseract', pic_ocr_data, img_np, media_lang, 1)
+            tess_zdata4 = [x for x in tess_zdata if x[0] == 4]
+            tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
+
+            tes_zdata, pic_ocr_data = get_ocr_data('tes', pic_ocr_data, gray_limg, media_lang, 1)
+            tes_zdata4 = [x for x in tes_zdata if x[0] == 4]
+            tes_zdata5 = [x for x in tes_zdata if x[0] == 5]
 
             if 'Paddle' in custom_ocr_engines:
                 rec_results_paddle, pic_ocr_data = get_ocr_data('paddle', pic_ocr_data, img_np, media_lang, 2)
@@ -7883,50 +7920,77 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
                 rec_results_baidu_accu, pic_ocr_data = get_ocr_data('baidu_accu', pic_ocr_data, img_np, media_lang, 4)
             ocr_data[pic_locate] = pic_ocr_data
 
-            lines_tesseract = tesseract2text(tess_zipped_data)
-            tesseract_text = lf.join(lines_tesseract)
+            lines_tess = tesseract2text(tess_zdata)
+            lines_tes = tesseract2text(tes_zdata)
+            tess_text = lf.join(lines_tess)
+            tes_text = lf.join(lines_tes)
 
             if SYSTEM in ['MAC', 'M1']:
                 rec_results_vision, pic_ocr_data = get_ocr_data('vision', pic_ocr_data, img_np, media_lang, 2)
                 lines_vision = rec2text(rec_results_vision)
                 vision_text = lf.join(lines_vision)
-            else:
-                rec_results_vision = None
-                vision_text = deepcopy(tesseract_text)
 
+                rec_results_vis, pic_ocr_data = get_ocr_data('vis', pic_ocr_data, gray_limg, media_lang, 2)
+                lines_vis = rec2text(rec_results_vis)
+                vis_text = lf.join(lines_vis)
+
+                rec_results_winocr = None
+                rec_results_win = None
+            else:
+                rec_results_winocr, pic_ocr_data = get_ocr_data('winocr', pic_ocr_data, img_np, media_lang, 1)
+                vision_text = deepcopy(tess_text)
+
+                rec_results_win, pic_ocr_data = get_ocr_data('win', pic_ocr_data, gray_limg, media_lang, 1)
+
+                rec_results_vision = None
+                rec_results_vis = None
+
+            # ================其他OCR================
             refer_ocrs = []
             if 'Baidu' in custom_ocr_engines:
                 lines_baidu = [x[-1] for x in rec_results_baidu]
                 baidu_text = lf.join(lines_baidu)
-                baidu_text_format = better_text(baidu_text, 'baidu')
-                refer_ocrs.append(baidu_text_format)
+                baidu_fmt_text = better_text(baidu_text, 'baidu')
+                refer_ocrs.append(baidu_fmt_text)
             if 'BaiduAccu' in custom_ocr_engines:
                 lines_baidu_accu = [x[-1] for x in rec_results_baidu_accu]
                 baidu_accu_text = lf.join(lines_baidu_accu)
-                baidu_accu_text_format = better_text(baidu_accu_text, 'baidu_accu')
-                refer_ocrs.append(baidu_accu_text_format)
+                baidu_accu_fmt_text = better_text(baidu_accu_text, 'baidu_accu')
+                refer_ocrs.append(baidu_accu_fmt_text)
             if 'Paddle' in custom_ocr_engines:
                 lines_paddle = [x[-1] for x in rec_results_paddle]
                 paddle_text = lf.join(lines_paddle)
-                paddle_text_format = better_text(paddle_text, 'paddle')
-                refer_ocrs.append(paddle_text_format)
+                paddle_fmt_text = better_text(paddle_text, 'paddle')
+                refer_ocrs.append(paddle_fmt_text)
             if 'Easy' in custom_ocr_engines:
                 lines_easy = [x[-1] for x in rec_results_easy]
                 easy_text = lf.join(lines_easy)
-                easy_text_format = better_text(easy_text, 'easy')
-                refer_ocrs.append(easy_text_format)
+                easy_fmt_text = better_text(easy_text, 'easy')
+                refer_ocrs.append(easy_fmt_text)
 
-            tesseract_text_format = better_text(tesseract_text, 'tesseract')
-            refer_ocrs.append(tesseract_text_format)
+            tess_fmt_text = better_text(tess_text, 'tesseract')
+            tes_fmt_text = better_text(tes_text, 'tesseract')
+            refer_ocrs.append(tess_fmt_text)
             if SYSTEM in ['MAC', 'M1']:
-                vision_text_format = better_text(vision_text, 'vision')
-                # 优化 'worlds' 和 'its'
-                if 'worlds' in vision_text_format.lower() or 'its' in vision_text_format.lower():
-                    vision_text_format = better_apostrophe(vision_text_format)
-                vision_text_format = fix_w_tess(vision_text_format, tesseract_text_format)
-                vision_text_format = better_punct(vision_text_format, refer_ocrs)
+                vision_fmt_text = better_text(vision_text, 'vision')
+                vision_fmt_text = fix_w_tess(vision_fmt_text, tess_fmt_text)
+                vision_fmt_text = better_punct(vision_fmt_text, refer_ocrs)
+
+                vis_fmt_text = better_text(vis_text, 'vis')
+                vis_fmt_text = fix_w_tess(vis_fmt_text, tess_fmt_text)
+                vis_fmt_text = better_punct(vis_fmt_text, refer_ocrs)
             else:
-                vision_text_format = deepcopy(tesseract_text_format)
+                vision_fmt_text = deepcopy(tess_fmt_text)
+                vis_fmt_text = deepcopy(tes_fmt_text)
+
+            # ================绘制投影示意图================
+            proj_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_proj.jpg'
+            img_tups = (img_np, gray_limg)
+            ocr_tups = (tess_zdata, tes_zdata, rec_results_vision, rec_results_vis, rec_results_winocr, rec_results_win)
+            proj_img = draw_para(img_tups, ocr_tups, page_ind, bubble_ind)
+            proj_img.paste(hori_proj_bi, (0, 0))
+            proj_img.paste(ver_proj_bi, (nw, nh))
+            write_pic(proj_jpg, proj_img)
 
             # ================获取气泡内文字的基本信息================
             raw_min_x, raw_min_y, raw_max_x, raw_max_y, min_x, min_y, max_x, max_y, center_pt = single_cnt.letter_coors
@@ -7935,33 +7999,10 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             src_font_size = int(0.8 * global_font_size)
             dst_font_size = global_font_size
 
-            # 提取所有的h值
-            heights_tess_words = [x[-3] for x in tess_zipped_data5]
-            heights_tess_lines = [x[-3] for x in tess_zipped_data4]
-            heights_textwords = [x.br_h for x in textwords]
-            heights_textlines = [x.br_h for x in textlines]
-
-            heights_tess_words = filter_w_bounds(heights_tess_words)
-            heights_textwords = filter_w_bounds(heights_textwords)
-
-            heights = heights_tess_words + heights_tess_lines + heights_textwords + heights_textlines
-
-            if heights:
-                heights.sort()
-                if len(heights) >= 10:
-                    # 计算众数，如果没有众数，则取中位数
-                    modes = multimode(heights)
-                    if modes:
-                        # 众数存在，取众数
-                        src_font_size = modes[0]
-                    else:
-                        # 众数不存在，取中位数
-                        src_font_size = median(heights)
-                else:
-                    # 计算平均高度
-                    src_font_size = mean(heights)
-                src_font_size = int(src_font_size)
+            if len(stroke_cnts) >= 10 and refer_h >= dot_line_h:
+                src_font_size = int(refer_h)
                 dst_font_size = get_dst_font_size(src_font_size, bubble_color_str, letter_color_str)
+
             br_area_real = (single_cnt.br_w - 2) * (single_cnt.br_h - 2)
             fulfill_ratio = single_cnt.area / br_area_real
             bubble_shape = '未知'
@@ -8007,25 +8048,50 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             pic_tup = ('picture', img_np, pic_locate, pic_ocr_data)
             pic_results.append(pic_tup)
             # ================将识别出的文字添加到docx文件中================
-            para_tup = ('paragraph', bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format)
+            para_tup = (
+                'paragraph', bubble_meta_str,
+                tess_zdata, tes_zdata,
+                rec_results_vision, rec_results_vis,
+                vision_fmt_text, vis_fmt_text,
+            )
             pic_results.append(para_tup)
     return pic_results
 
 
-def get_line_infos(tess_zipped_data, img_np):
+def most_common_color(image):
+    """返回图像中出现最多的颜色"""
+    pixels = list(image.getdata())
+    most_common_pixel = Counter(pixels).most_common(1)[0][0]
+    return most_common_pixel
+
+
+def add_pad2img(image, padding, bg_color=None):
+    """给图像加上指定的padding，并使用指定的背景色或默认背景色"""
+    if bg_color is None:
+        bg_color = most_common_color(image)
+
+    new_width = image.width + 2 * padding
+    new_height = image.height + 2 * padding
+    padded_img = Image.new('RGB', (new_width, new_height), bg_color)
+    padded_img.paste(image, (padding, padding))
+    return padded_img
+
+
+@logger.catch
+def get_line_infos(tess_zdata, img_np):
     line_infos = []
-    tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
-    par_nums = [x[3] for x in tess_zipped_data5]
+    tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
+    par_nums = [x[3] for x in tess_zdata5]
     par_nums = reduce_list(par_nums)
     par_nums.sort()
-    line_nums = [x[4] for x in tess_zipped_data5]
+    line_nums = [x[4] for x in tess_zdata5]
     line_nums = reduce_list(line_nums)
     line_nums.sort()
     for par_num in par_nums:
         # 每个段落
         for line_num in line_nums:
             # 每一行
-            line_data = [x for x in tess_zipped_data5 if x[3] == par_num and x[4] == line_num]
+            line_data = [x for x in tess_zdata5 if x[3] == par_num and x[4] == line_num]
             line_data.sort(key=lambda x: x[5])
             word_imgs = []
             for l in range(len(line_data)):
@@ -8048,85 +8114,491 @@ def get_line_infos(tess_zipped_data, img_np):
     return line_infos
 
 
-def draw_para(page_ind, bubble_ind, img_np, tess_zipped_data, rec_results_vision):
-    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
-    image_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+@logger.catch
+def stitch_imgs_normal(input_imgs):
+    # 转换所有输入图像为 PIL 图像
+    pil_imgs = []
+    for img in input_imgs:
+        if isinstance(img, ndarray):
+            # 转换 NumPy 数组为 PIL 图像
+            if len(img.shape) == 2:  # 灰度或黑白图像
+                pil_img = Image.fromarray(img, 'L')
+            else:  # if len(img.shape) == 3:  # 彩色图像
+                pil_img = Image.fromarray(img, 'RGB')
+        else:  # isinstance(img, Image.Image)
+            pil_img = img
+        pil_imgs.append(pil_img)
 
-    tess_zipped_data4 = [x for x in tess_zipped_data if x[0] == 4]
-    tess_zipped_data5 = [x for x in tess_zipped_data if x[0] == 5]
+    # 垂直拼接
+    total_height = sum(img.height for img in pil_imgs)
+    max_width = max(img.width for img in pil_imgs)
+    stitched_img = Image.new('RGB' if pil_imgs[0].mode == 'RGB' else 'L', (max_width, total_height), color=255)
+    y_offset = 0
+    for img in pil_imgs:
+        stitched_img.paste(img, (0, y_offset))
+        y_offset += img.height
+    return stitched_img
 
-    cp_bubble_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}.jpg'
-    cp_br_tess_line_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_line.jpg'
-    cp_br_tess_word_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_tess_word.jpg'
-    cp_br_vision_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_vision.jpg'
-    cp_br_textword_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textword.jpg'
-    cp_br_textline_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_textline.jpg'
-    write_pic(cp_bubble_jpg, img_np)
 
-    # ================tesseract坐标绘制================
-    br_tess_word_image_pil = image_pil.convert("RGBA")
-    br_tess_word_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-    br_tess_word_draw = ImageDraw.Draw(br_tess_word_overlay)
-    for l in range(len(tess_zipped_data5)):
-        word_data = tess_zipped_data5[l]
-        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
-        br_tess_word_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
-    br_tess_word_image_pil.paste(br_tess_word_overlay, mask=br_tess_word_overlay)
-    write_pic(cp_br_tess_word_jpg, br_tess_word_image_pil)
+@logger.catch
+def stitch_imgs(input_imgs, bg_color='B'):
+    tolerance = 30
+    pil_imgs = []
+    for img in input_imgs:
+        if isinstance(img, ndarray):
+            # 转换 NumPy 数组为 PIL 图像
+            if len(img.shape) == 2:  # 灰度或黑白图像
+                pil_img = Image.fromarray(img, 'L')
+            else:  # if len(img.shape) == 3:  # 彩色图像
+                pil_img = Image.fromarray(img, 'RGB')
+        else:  # isinstance(img, Image.Image)
+            pil_img = img
+        # 转换背景为透明
+        if pil_img.mode != 'RGBA':
+            pil_img = pil_img.convert('RGBA')
+        data = array(pil_img)
+        if bg_color == 'B':
+            # 纯黑色变为透明
+            BC = [0, 0, 0]
+        else:  # if bg_color == 'W'
+            # 纯白色变为透明
+            BC = [255, 255, 255]
+        mask = np.all(data[:, :, :3] == BC, axis=-1)
+        data[mask, 3] = 0
+        pil_img = Image.fromarray(data)
+        pil_imgs.append(pil_img)
 
-    br_tess_line_image_pil = image_pil.convert("RGBA")
-    br_tess_line_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-    br_tess_line_draw = ImageDraw.Draw(br_tess_line_overlay)
-    for l in range(len(tess_zipped_data4)):
-        word_data = tess_zipped_data4[l]
-        level, page_num, block_num, par_num, line_num, word_num, tleft, ttop, twidth, theight, tconf, text = word_data
-        br_tess_line_draw.rectangle([(tleft, ttop), (tleft + twidth, ttop + theight)], outline=trans_red, width=1)
-    br_tess_line_image_pil.paste(br_tess_line_overlay, mask=br_tess_line_overlay)
-    write_pic(cp_br_tess_line_jpg, br_tess_line_image_pil)
+    # 计算拼接后的图像总高度
+    total_height = pil_imgs[0].height + line_spacing * (len(pil_imgs) - 1)
+    max_width = max(img.width for img in pil_imgs)
 
-    # ================vision坐标绘制================
-    if rec_results_vision:
-        br_vision_image_pil = image_pil.convert("RGBA")
-        br_vision_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-        br_vision_draw = ImageDraw.Draw(br_vision_overlay)
-        for r in range(len(rec_results_vision)):
-            rec_result = rec_results_vision[r]
-            vx, vy, vw, vh, vconf, text_seg = rec_result
-            br_vision_draw.rectangle([(vx, nh - vy - vh), (vx + vw, nh - vy)], outline=trans_olive, width=1)
-        br_vision_image_pil.paste(br_vision_overlay, mask=br_vision_overlay)
-        write_pic(cp_br_vision_jpg, br_vision_image_pil)
+    # 根据bg_color设置背景颜色
+    bg_fill_color = rgba_black if bg_color == 'B' else rgba_white
 
-    # ================cv2坐标绘制================
-    rec_textblocks = get_textblocks(img_np, media_type)
-    if rec_textblocks:
-        rec_textblock = rec_textblocks[0]
-        textlines = rec_textblock.textlines
-        textwords = list(chain(*[x.textwords for x in textlines]))
+    # 创建新图像并指定背景颜色
+    stitched_img = Image.new('RGBA', (max_width, total_height), bg_fill_color)
+    y_offset = 0
+    for img in pil_imgs:
+        stitched_img.paste(img, (0, y_offset), img)
+        y_offset += line_spacing
+    stitched_img = conv_img(stitched_img, 'CV')
+    return stitched_img
 
-        br_textword_image_pil = image_pil.convert("RGBA")
-        br_textword_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-        br_textword_draw = ImageDraw.Draw(br_textword_overlay)
-        for t in range(len(textwords)):
-            textword = textwords[t]
-            br_textword_draw.rectangle([textword.left_top, textword.right_bottom], outline=trans_purple, width=1)
-        br_textword_image_pil.paste(br_textword_overlay, mask=br_textword_overlay)
-        write_pic(cp_br_textword_jpg, br_textword_image_pil)
 
-        br_textline_image_pil = image_pil.convert("RGBA")
-        br_textline_overlay = Image.new('RGBA', image_pil.size, rgba_zero)
-        br_textline_draw = ImageDraw.Draw(br_textline_overlay)
-        for t in range(len(textlines)):
-            textline = textlines[t]
-            br_textline_draw.rectangle([textline.left_top, textline.right_bottom], outline=trans_purple, width=1)
-        br_textline_image_pil.paste(br_textline_overlay, mask=br_textline_overlay)
-        write_pic(cp_br_textline_jpg, br_textline_image_pil)
+# ================图形化参数================
+@logger.catch
+def cal_paras(hori_proj_bi_inv, upper, lower):
+    row_segment = hori_proj_bi_inv[int(upper):int(lower), :]
+    # 每行宽度
+    widths = np.sum(row_segment == 255, axis=1)
+    # 计算方差
+    vari = np.var(widths)
+    area = sum(widths)
+    avg_width = np.mean(widths)
+    logger.debug(f'{area=}, {len(widths)=}, {avg_width=:.2f}, {vari=:.2f}')
+    return area, widths, avg_width, vari
 
-        textblock_bubbles = get_textblock_bubbles(img_np, rec_textblocks)
-        cp_textblock_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextBlock[{len(textlines)}].jpg'
-        write_pic(cp_textblock_jpg, textblock_bubbles)
+
+def get_refer_h(stroke_cnts):
+    stroke_cnts_fit = [x for x in stroke_cnts if x.br_h >= dot_line_h]
+    if not stroke_cnts_fit:
+        stroke_cnts_fit = stroke_cnts
+
+    # ================估测基准行高================
+    # 实际行高大于基准行高
+    br_hs = [x.br_h for x in stroke_cnts_fit]
+    mean_h = mean(br_hs)
+    if len(stroke_cnts_fit) >= 10:
+        # 去掉10%的最大值
+        cutoff = percentile(br_hs, 90)
+        filtered_br_hs = [h for h in br_hs if h <= cutoff]
+        avg_h = mean(filtered_br_hs)
+        # 找出大于平均值的高度
+        greater_than_avg = [h for h in filtered_br_hs if h > avg_h]
+        if greater_than_avg:
+            # 尝试找出众数，如果没有众数，则取中值
+            modes = multimode(greater_than_avg)
+            refer_h = modes[0] if modes else median(greater_than_avg)
+        else:
+            # 如果没有大于平均值的高度，使用过滤后的平均值
+            refer_h = avg_h
     else:
-        textlines = []
-    return textlines
+        # 如果数量小于10，直接取平均值
+        refer_h = mean(br_hs)
+    logger.warning(f'{len(stroke_cnts)=}, {mean_h=:.2f}, {refer_h=}')
+    return refer_h
+
+
+@logger.catch
+def get_line_proj_cnts(img_np, hori_proj_bi):
+    # ================图像参数================
+    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
+    white_bg = ones((nh, nw, 3), dtype=uint8) * 255
+    black_bg = zeros((nh, nw), dtype=uint8)
+
+    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+    ret, img_bi = threshold(img_gray, 127, 255, THRESH_BINARY)
+    # 白色二值化文字
+    img_bi_inv = bitwise_not(img_bi)
+    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+    # 将img_np中特别浅的部分变为白色
+    img_opt = img_gray.copy()
+    img_opt[img_opt >= white_thres] = 255
+
+    hori_proj_bi_np = array(hori_proj_bi)
+    hori_proj_bi_inv = bitwise_not(hori_proj_bi_np)
+
+    # ================笔画和原始投影轮廓================
+    stroke_contours, stroke_hier = findContours(img_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+    proj_contours_raw, raw_hier = findContours(hori_proj_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+
+    stroke_cnts = [Contr(x) for x in stroke_contours]
+    stroke_cnts = [x for x in stroke_cnts if x.area >= 1]
+    stroke_cnts.sort(key=lambda x: (x.br_x, x.br_y))
+
+    refer_h = get_refer_h(stroke_cnts)
+
+    # ================多行文本的最低高度================
+    line_multi_h_min = int(max(line_multi_h, 2 * refer_h - 1))
+
+    proj_cnts_raw = [Contr(x) for x in proj_contours_raw]
+    proj_cnts_raw.sort(key=lambda x: x.br_y)
+    proj_cnts_raw_ok = [x for x in proj_cnts_raw if x.area >= min_cnt_area]
+    br_hs = [x.br_h for x in proj_cnts_raw_ok]
+
+    # 示意图
+    proj_mask = hori_proj_bi_np.copy()
+
+    line_proj_cnts = []
+    if len(proj_cnts_raw) == 1 and not proj_cnts_raw_ok:
+        # ================短小的一行，只有一个符号（省略号之类）================
+        line_proj_cnts = deepcopy(proj_cnts_raw)
+    elif max(br_hs) <= line_multi_h_min:
+        # ================行高均符合规则，不存在多行粘连================
+        line_proj_cnts = deepcopy(proj_cnts_raw)
+    else:
+        # ================可能存在多行粘连================
+        for p in range(len(proj_cnts_raw)):
+            proj_cnt_raw = proj_cnts_raw[p]
+            if proj_cnt_raw.br_h <= line_multi_h_min:
+                # ================单行================
+                line_proj_cnts.append(proj_cnt_raw)
+            else:
+                # ================多行================
+                sub_line_proj_cnts = []
+                logger.debug(f'{proj_cnt_raw=}, {proj_cnt_raw.avg_w=:.2f}')
+                upper = proj_cnt_raw.br_y
+                lower = proj_cnt_raw.br_v
+                upper_raw = deepcopy(upper)
+                lower_raw = deepcopy(lower)
+                area, widths, avg_width, vari = cal_paras(hori_proj_bi_inv, upper, lower)
+                area0, widths0, avg_width0, vari0 = cal_paras(hori_proj_bi_inv, upper, upper + refer_h)
+                area1, widths1, avg_width1, vari1 = cal_paras(hori_proj_bi_inv, lower - refer_h, lower)
+                # ================估测所需截断宽度================
+                if proj_cnt_raw.br_w <= 60:
+                    ratio = 0.12
+                elif proj_cnt_raw.br_w <= 120:
+                    ratio = 0.1
+                elif proj_cnt_raw.br_w <= 180:
+                    ratio = 0.08
+                elif proj_cnt_raw.br_w <= 240:
+                    ratio = 0.06
+                else:
+                    ratio = 0.04
+                line_edge = proj_cnt_raw.br_w * ratio
+                line_edge = clamp(line_edge, line_edge_min, line_edge_max)
+                line_edge = int(line_edge)
+                # ================仅对对话框优化================
+                if refer_h <= 20:
+                    if avg_width0 <= line_edge + 2:
+                        logger.error(f'{avg_width0=:.2f}, {line_edge=}, 首行过短')
+                        upper += refer_h
+                    if avg_width1 <= line_edge + 2:
+                        logger.error(f'{avg_width1=:.2f}, {line_edge=}, 尾行过短')
+                        lower -= refer_h
+                # ================涂黑白色轮廓中最右边line_edge像素宽================
+                hori_proj_roi = hori_proj_bi_inv.copy()
+                hori_proj_roi[:proj_cnt_raw.br_y - 1, :] = 0
+                hori_proj_roi[int(upper):int(lower), -line_edge:] = 0
+                hori_proj_roi[proj_cnt_raw.br_v + 1:, :] = 0
+
+                proj_contours_fit, fit_hier = findContours(hori_proj_roi, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+                proj_cnts_fit = [Contr(x) for x in proj_contours_fit]
+                proj_cnts_fit.sort(key=lambda x: x.br_y)
+                proj_cnts_fit_ok = [x for x in proj_cnts_fit if x.area >= min_cnt_area]
+                logger.warning(f'[{line_edge}]{len(proj_cnts_fit)=}, {len(proj_cnts_fit_ok)=}')
+
+                if len(proj_cnts_fit) <= 2 and len(proj_cnts_fit_ok) < 2:
+                    # 切分不成功，可能不是粘连
+                    sub_line_proj_cnts.append(proj_cnt_raw)
+                else:
+                    # 多个文本行粘连切分成功
+                    split_lines = []
+                    for f in range(len(proj_cnts_fit_ok) - 1):
+                        cnt_fit = proj_cnts_fit_ok[f]
+                        cnt_fit_next = proj_cnts_fit_ok[f + 1]
+                        # 切割线应该在白色区域的最小值处
+                        start_y = cnt_fit.br_v
+                        end_y = cnt_fit_next.br_y
+                        row_segment = hori_proj_bi_inv[start_y:end_y, :]
+                        white_px_count = np.sum(row_segment == 255, axis=1)
+                        split_line = argmin(white_px_count) + start_y
+                        split_lines.append(split_line)
+                    all_lines = [proj_cnts_fit_ok[0].br_y - 1] + split_lines + [proj_cnts_fit_ok[-1].br_v + 1]
+                    # ================建立基准行================
+                    for a in range(len(all_lines) - 1):
+                        start_line = all_lines[a]
+                        end_line = all_lines[a + 1]
+                        proj_roi_line = hori_proj_bi_inv.copy()
+                        if a == 0:
+                            # 有粘连的行的第一个
+                            proj_roi_line[:start_line - 1, :] = 0
+                        else:
+                            proj_roi_line[:start_line, :] = 0
+                        if a == len(all_lines) - 1:
+                            # 有粘连的行的最后一个
+                            proj_roi_line[end_line + 1:, :] = 0
+                        else:
+                            proj_roi_line[end_line:, :] = 0
+
+                        contours_line, line_hier = findContours(proj_roi_line, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+                        cnts_line = [Contr(x) for x in contours_line]
+                        cnts_line.sort(key=lambda x: x.br_y)
+                        cnts_line_ok = [x for x in cnts_line if x.area >= min_cnt_area]
+                        if cnts_line_ok:
+                            line_proj_cnt = cnts_line_ok[0]
+                        else:  # if cnts_line:
+                            line_proj_cnt = cnts_line[0]
+                        sub_line_proj_cnts.append(line_proj_cnt)
+
+                # 示意图
+                proj_mask[int(upper):int(lower), -line_edge:] = 127
+                line_proj_cnts.extend(sub_line_proj_cnts)
+
+    # ================处理只有点的文本行================
+    if len(line_proj_cnts) >= 2:
+        # ================点在最后一行则不处理================
+        br_hs = [x.br_h for x in line_proj_cnts[:-1]]
+        min_br_h = min(br_hs)
+        if min_br_h <= dot_h:
+            # ================找出所有点型文本行================
+            dot_inds = []
+            ind = 0
+            while ind < len(line_proj_cnts) - 1:
+                line_proj_cnt = line_proj_cnts[ind]
+                if line_proj_cnt.br_h <= dot_h:
+                    dot_inds.append(ind)
+                ind += 1
+
+            # ================找出所有点型文本行================
+            new_line_proj_cnts = []
+            pin = 0
+            while pin < len(line_proj_cnts):
+                line_proj_cnt = line_proj_cnts[pin]
+                if pin in dot_inds:
+                    line_proj_cnt = line_proj_cnts[pin]
+                    line_proj_cnt_next = line_proj_cnts[pin + 1]
+                    # 涂白最右边1像素宽
+                    hori_proj_dot_roi = hori_proj_bi_inv.copy()
+                    hori_proj_dot_roi[:line_proj_cnt.br_y - 1, :] = 0
+                    hori_proj_dot_roi[line_proj_cnt.br_v:line_proj_cnt_next.br_y, -1:] = 255
+                    hori_proj_dot_roi[line_proj_cnt_next.br_v + 1:, :] = 0
+                    proj_dot_contours, proj_dot_hier = findContours(hori_proj_dot_roi, RETR_EXTERNAL,
+                                                                    CHAIN_APPROX_SIMPLE)
+                    proj_dot_cnts = [Contr(x) for x in proj_dot_contours]
+                    proj_dot_cnts.sort(key=lambda x: x.br_y)
+                    proj_dot_cnts_ok = [x for x in proj_dot_cnts if x.area >= min_cnt_area]
+                    if proj_dot_cnts_ok:
+                        alt_cnt = proj_dot_cnts_ok[0]
+                    else:  # if proj_dot_cnts
+                        alt_cnt = proj_dot_cnts[0]
+                    new_line_proj_cnts.append(alt_cnt)
+                elif pin - 1 in dot_inds:
+                    pass
+                else:
+                    new_line_proj_cnts.append(line_proj_cnt)
+                pin += 1
+            line_proj_cnts = new_line_proj_cnts
+
+    # ================添加文本行矩形================
+    for line_proj_cnt in line_proj_cnts:
+        line_proj_cnt.add_line_polygon(nw)
+
+    # ================进行高度筛选================
+    if len(line_proj_cnts) >= 2:
+        line_proj_cnts = [x for x in line_proj_cnts if x.br_h >= textline_h_min]
+
+    for l in range(len(stroke_cnts)):
+        # ================每个笔画轮廓================
+        stroke_cnt = stroke_cnts[l]
+        # 绘制stroke_cnt的遮罩
+        stroke_mask = drawContours(black_bg.copy(), [stroke_cnt.contour], -1, (255), FILLED)
+        # write_pic(stroke_jpg, stroke_mask)
+        overlap_ratios = []
+        for t in range(len(line_proj_cnts)):
+            # ================每个基准行================
+            line_proj_cnt = line_proj_cnts[t]
+            if stroke_cnt.polygon.intersects(line_proj_cnt.line_polygon):
+                # 获取交集区域
+                overlap = stroke_cnt.polygon.intersection(line_proj_cnt.line_polygon)
+                line_mask = rectangle(black_bg.copy(), line_proj_cnt.line_br_xy, line_proj_cnt.line_br_uv, (255),
+                                      FILLED)
+                # 创建交集遮罩
+                overlap_mask = bitwise_and(stroke_mask, line_mask)
+                # write_pic(overlap_jpg, overlap_mask)
+                # 计算两个区域的非白色像素数量
+                overlap_non_white_area = np.sum((img_opt[overlap_mask == 255] != 255).astype(int))
+                stroke_non_white_area = np.sum((img_opt[stroke_mask == 255] != 255).astype(int))
+                if stroke_non_white_area == 0:
+                    overlap_ratio = 0
+                else:
+                    overlap_ratio = overlap_non_white_area / stroke_non_white_area
+            else:
+                overlap_ratio = 0
+            overlap_ratios.append(overlap_ratio)
+
+        ind = overlap_ratios.index(max(overlap_ratios))
+        # logger.debug(f'[{ind}]{max(overlap_ratios)=}')
+        value_2nd, index_2nd = find_nth_largest(overlap_ratios, 2)
+        line_proj_cnt_1st = line_proj_cnts[ind]
+        # 笔画相对于行高的比例
+        h_ratio = stroke_cnt.br_h / line_proj_cnt_1st.br_h
+
+        if max(overlap_ratios) >= 0.75 and h_ratio <= 1.25:
+            belong = 'A'
+            # 绝大部分都在一个文本行内
+            line_proj_cnt_1st.add_stroke(stroke_cnt)
+        elif len(overlap_ratios) >= 2 and value_2nd >= 0.1:
+            logger.debug(f'{len(line_proj_cnts)=}, {len(overlap_ratios)=}')
+            belong = 'B'
+            # 找到与笔画重叠的文本行
+            overlapping_lines = [
+                line_proj_cnts[ind],
+                line_proj_cnts[index_2nd],
+            ]
+            for line_proj_cnt in overlapping_lines:
+                # 创建新的交集遮罩
+                line_mask = rectangle(black_bg.copy(), line_proj_cnt.line_br_xy, line_proj_cnt.line_br_uv, (255),
+                                      FILLED)
+                intersected_mask = bitwise_and(stroke_mask, line_mask)
+                # 创建新的笔画轮廓
+                sub_stroke_contours, sub_stroke_hier = findContours(intersected_mask, RETR_EXTERNAL,
+                                                                    CHAIN_APPROX_SIMPLE)
+                sub_stroke_cnts = [Contr(x) for x in sub_stroke_contours]
+                sub_stroke_cnts = [x for x in sub_stroke_cnts if x.area >= 1]
+                for stroke_cnt in sub_stroke_cnts:
+                    line_proj_cnt.add_stroke(stroke_cnt)
+        elif max(overlap_ratios) >= 0.01:
+            belong = 'C'
+            line_proj_cnt_1st.add_stroke(stroke_cnt)
+        else:
+            belong = 'D'
+            # 无归属且无重叠面积则归于最近的line_proj_cnt
+            nearest_line_proj_cnt = min(line_proj_cnts, key=lambda cnt: abs(cnt.br_y - stroke_cnt.br_y))
+            nearest_line_proj_cnt.add_stroke(stroke_cnt)
+
+        imes = f'[{l}]{belong}[{len(line_proj_cnts)}行之{ind + 1}]{max(overlap_ratios)=:.2f}, {h_ratio=:.2f}'
+        if len(overlap_ratios) >= 2:
+            imes += f', {value_2nd=}, {index_2nd=}'
+    return line_proj_cnts, proj_mask
+
+
+@logger.catch
+def draw_line_proj_cnts(img_np, line_proj_cnts):
+    ih, iw = img_np.shape[0:2]
+    black_bg = zeros((ih, iw), dtype=uint8)
+
+    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+    ret, img_bi = threshold(img_gray, 127, 255, THRESH_BINARY)
+    # 白色二值化文字
+    img_bi_inv = bitwise_not(img_bi)
+    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+    # 将img_np中特别浅的部分变为白色
+    img_opt = img_gray.copy()
+    img_opt[img_opt >= white_thres] = 255
+
+    # ================绘制示意图的彩色文本行边框================
+    img_w_lines = deepcopy(img_pil)
+    lines_draw = ImageDraw.Draw(img_w_lines, 'RGBA')
+    for p in range(len(line_proj_cnts)):
+        cnt = line_proj_cnts[p]
+        start_y = cnt.br_y
+        end_y = cnt.br_v
+        row_segment = img_bi[start_y:end_y + 1, :]
+        if np.any(row_segment == 0):
+            left = np.min(where(row_segment == 0)[1])
+            right = np.max(where(row_segment == 0)[1])
+            color = colormap_tab20(p % 20)[:3]
+            color_rgb = tuple(int(c * 255) for c in color)
+            color_rgba = color_rgb + (200,)
+            lines_draw.rectangle([(left, start_y), (right, end_y)], outline=color_rgba)
+
+    # ================获取每行文本对应的笔画轮廓================
+    line_binarys = []
+    for t in range(len(line_proj_cnts)):
+        line_proj_cnt = line_proj_cnts[t]
+        contours = [x.contour for x in line_proj_cnt.strokes]
+        # line_binary = drawContours(black_bg.copy(), contours, -1, 255, FILLED)
+        # 初始化一个黑色背景
+        combined_mask = black_bg.copy()
+        # 对每个轮廓单独绘制
+        for contour in contours:
+            mask = black_bg.copy()  # 每个轮廓都用一个新的遮罩
+            drawContours(mask, [contour], -1, 255, FILLED)  # 绘制轮廓
+            combined_mask = bitwise_or(combined_mask, mask)  # 将当前轮廓的遮罩合并到总遮罩上
+        line_binary = combined_mask
+        # 最终的遮罩将所有轮廓合并，即使有重叠，重叠部分也是白色
+        line_binarys.append(line_binary)
+
+    # ================获取未归属区域================
+    mask_belong = black_bg.copy()
+    # 叠加所有文本行的掩模
+    for line_binary in line_binarys:
+        mask_belong = maximum(mask_belong, line_binary)
+    mask_unbelong = bitwise_not(mask_belong)
+
+    # ================计算周边区域归属并更新未归属区域================
+    line_binary_borders = []
+    for l in range(len(line_binarys)):
+        line_binary = line_binarys[l]
+        line_binary_d3 = dilate(line_binary, kernel3, iterations=1)
+        line_binary_border = bitwise_and(line_binary_d3, mask_unbelong)
+        line_binary_borders.append(line_binary_border)
+        # 更新 mask_unbelong 以去掉已归属的边界区域
+        mask_unbelong = bitwise_and(mask_unbelong, bitwise_not(line_binary_border))
+
+    # ================将未归属区域按基准矩形分配到每个文本行================
+    real_masks = []
+    for t in range(len(line_proj_cnts)):
+        line_proj_cnt = line_proj_cnts[t]
+        line_binary = line_binarys[t]
+        line_binary_border = line_binary_borders[t]
+        # 创建每一行文本的基准矩形掩模
+        line_belong_mask = zeros_like(img_bi, dtype=np.uint8)
+        x, y, w, h = line_proj_cnt.line_br
+        line_belong_mask[y:y + h, x:x + w] = 255
+        # 将基准矩形掩模与mask_unbelong重叠的部分视为每一行的真正区域
+        line_belong_mask = minimum(line_belong_mask, mask_unbelong)
+        # 每一行的真正掩模为 line_binary 加上 line_binary_border 加上 line_belong_mask
+        real_mask = maximum(maximum(line_binary, line_binary_border), line_belong_mask)
+        real_masks.append(real_mask)
+
+        # ================获取每一行真正掩模对应的非白色像素区域================
+        textline_imgs = []
+        for real_mask in real_masks:
+            # 创建一个白色背景图像
+            textline_img = ones_like(img_opt) * 255
+            # 从原始灰度图像提取非白色像素，并放置在白色背景图像上
+            textline_img[real_mask == 255] = img_opt[real_mask == 255]
+            textline_imgs.append(textline_img)
+
+    # ================制作最终效果图================
+    stitched_bi_img = stitch_imgs(line_binarys, 'B')
+    gray_limg = stitch_imgs(textline_imgs, 'W')
+    # gray_limg = stitch_imgs_normal(textline_imgs)
+    return img_w_lines, stitched_bi_img, gray_limg
 
 
 @logger.catch
@@ -8134,20 +8606,34 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     logger.warning(f'[{page_ind=}]{bubble_ind=}')
     auto_subdir = Auto / img_folder.name
 
-    # ================全白图像================
+    # ================图像参数================
     nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
-    white_img = ones((nh, nw, 3), dtype=uint8) * 255
-    # ================文本================
-    bubble_meta_str, tess_zipped_data, rec_results_vision, vision_text_format = pic_result[1:5]
-    vision_lines = vision_text_format.splitlines()
-    textlines = draw_para(page_ind, bubble_ind, img_np, tess_zipped_data, rec_results_vision)
+    white_bg = ones((nh, nw, 3), dtype=uint8) * 255
+    black_bg = zeros((nh, nw), dtype=uint8)
 
+    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+    ret, img_bi = threshold(img_gray, 127, 255, THRESH_BINARY)
+    # 白色二值化文字
+    img_bi_inv = bitwise_not(img_bi)
+    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+
+    # ================文本================
+    bubble_meta_str = pic_result[1]
+    tess_zdata, tes_zdata = pic_result[2:4]
+    rec_results_vision, rec_results_vis = pic_result[4:6]
+    vision_fmt_text, vis_fmt_text = pic_result[6:8]
+    # vision_lines = vision_fmt_text.splitlines()
+    vision_lines = vis_fmt_text.splitlines()
     # ================获取气泡元数据================
-    bubble_metadata = get_bubble_metadata(bubble_meta_str)
+    bubble_metadata = get_bubble_meta(bubble_meta_str)
     bubble_color_str = bubble_metadata['bubble_color_str']
     letter_color_str = bubble_metadata['letter_color_str']
     color_locate = f"{bubble_color_str}-{letter_color_str}"
-    logger.warning(f'{color_locate=}')
+    bold_thres = bold_thres_dic['default']
+    if color_locate in bold_thres_dic:
+        bold_thres = bold_thres_dic[color_locate]
+    logger.warning(f'{color_locate=}, {bold_thres=}')
     char_area_dict, word_actual_areas_dict = {}, {}
     if color_locate in area_dic:
         char_area_dict, word_actual_areas_dict = area_dic[color_locate]
@@ -8161,34 +8647,7 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     new_run = new_para.add_run(bubble_meta_str)
     new_run = new_para.add_run(lf)  # 软换行
     # ================每一个对话框================
-    line_infos = get_line_infos(tess_zipped_data, img_np)
-    # ================如果行数有差异则进行修正================
-    if len(line_infos) != len(vision_lines) and len(line_infos) != len(textlines):
-        new_line_infos = []
-        for t in range(len(textlines)):
-            # ================每一行================
-            textline = textlines[t]
-            br_x, br_y, br_w, br_h = textline.br
-            if br_w >= 3 and br_h >= 1:
-                line_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
-                line_in_img = deepcopy(white_img)
-                line_in_img[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1] = line_img
-                line_in_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_L{t + 1}_in.png'
-                write_pic(line_in_img_png, line_in_img)
-                tess_zipped_data_line = ocr_by_tesseract(line_in_img, media_lang, vert=False)
-                ent_line_infos = get_line_infos(tess_zipped_data_line, line_in_img)
-                new_line_infos.extend(ent_line_infos)
-        line_infos = new_line_infos
-        # ================绘制每个单词的图像================
-        for l in range(len(line_infos)):
-            # 每一行
-            word_imgs = line_infos[l]
-            for w in range(len(word_imgs)):
-                # 每一词
-                pos_meta = word_imgs[w]
-                text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-                word_img_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_A{par_num}_L{l + 1}_W{word_num}.png'
-                # write_pic(word_img_png, word_img)
+    line_infos = get_line_infos(tess_zdata, img_np)
 
     run_infos = []
     if len(vision_lines) == len(line_infos):
@@ -8212,23 +8671,8 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                         new_line_words.append(line_word)
                 line_words = new_line_words
 
-            # ================如果词数仍有差异则继续修正================
-            if use_textwords and l < len(textlines):
-                textline = textlines[l]
-                textwords = textline.textwords
-                if len(tess_words) != len(line_words) and len(tess_words) != len(textwords):
-                    new_word_imgs = []
-                    for t in range(len(textwords)):
-                        textword = textwords[t]
-                        br_x, br_y, br_w, br_h = textword.br
-                        if br_w >= 3 and br_h >= 1:
-                            new_word_img = img_np[br_y - 1:br_y + br_h + 1, br_x - 1:br_x + br_w + 1]
-                            word_img = [new_word_img]
-                            new_word_imgs.append(word_img)
-                    if len(new_word_imgs) == len(line_words):
-                        word_imgs = new_word_imgs
+            # ================词数相等时================
             if len(word_imgs) == len(line_words):
-                # 词数相等时
                 for w in range(len(word_imgs)):
                     # 每一词
                     pos_meta = word_imgs[w]
@@ -8312,10 +8756,10 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                 run_info = (lf, '')
                 run_infos.append(run_info)
     else:
-        run_info = (vision_text_format, '')
+        run_info = (vision_fmt_text, '')
         run_infos.append(run_info)
         logger.error(f'行数不相等, [{len(vision_lines)}-{len(line_infos)}]')
-        logger.error(f'{vision_text_format}')
+        logger.error(f'{vision_fmt_text}')
         for l in range(len(line_infos)):
             word_imgs = line_infos[l]
             words = [x[0] for x in word_imgs]
@@ -8335,25 +8779,6 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
             new_run.italic = True
     ocr_doc.add_paragraph('')
     return ocr_doc
-
-
-def most_common_color(image):
-    """返回图像中出现最多的颜色"""
-    pixels = list(image.getdata())
-    most_common_pixel = Counter(pixels).most_common(1)[0][0]
-    return most_common_pixel
-
-
-def add_pad2img(image, padding, bg_color=None):
-    """给图像加上指定的padding，并使用指定的背景色或默认背景色"""
-    if bg_color is None:
-        bg_color = most_common_color(image)
-
-    new_width = image.width + 2 * padding
-    new_height = image.height + 2 * padding
-    padded_img = Image.new('RGB', (new_width, new_height), bg_color)
-    padded_img.paste(image, (padding, padding))
-    return padded_img
 
 
 @logger.catch
@@ -8420,7 +8845,7 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
 
             # 考虑高度
             total_img_h = sum(img.height for img in all_cropped_imgs)
-            total_spacing = stitch_spacing * 2 * (len(all_cropped_imgs) - 1)
+            total_spacing = bubble_spacing * 2 * (len(all_cropped_imgs) - 1)
             total_word_h = word_height * (len(all_cropped_imgs) - 1)
             total_height = total_img_h + total_spacing + total_word_h
 
@@ -8428,11 +8853,11 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
             y_offset = 0
             for img in all_cropped_imgs[:-1]:  # 除了最后一个图像
                 long_img.paste(img, ((max_width - img.width) // 2, y_offset))
-                y_offset += img.height + stitch_spacing
+                y_offset += img.height + bubble_spacing
                 # 粘贴分隔词图像
                 word_x = (max_width - word_width) // 2
                 long_img.paste(cropped_text_img, (word_x, y_offset), cropped_text_img)
-                y_offset += word_height + stitch_spacing
+                y_offset += word_height + bubble_spacing
             # 添加最后一个图像
             long_img.paste(all_cropped_imgs[-1], ((max_width - all_cropped_imgs[-1].width) // 2, y_offset))
             long_img = add_pad2img(long_img, 20, color_white)
@@ -8538,7 +8963,6 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
             for future in as_completed(futures):
                 pic_results = future.result()
                 all_pic_results.append(pic_results)
-
         all_pic_results.sort(key=lambda x: x[0][1])
 
     ocr_doc = Document()
@@ -8668,6 +9092,7 @@ def step4_readable(img_folder):
                         new_run.font.highlight_color = run.font.highlight_color
                         new_run.font.color.rgb = run.font.color.rgb
     write_docx(read_docx, readable_doc)
+    logger.warning(f'{read_docx=}')
     with open(read_docx, 'rb') as docx_file:
         result = convert_to_html(docx_file)
         result_html = result.value
@@ -8803,6 +9228,7 @@ def fill_textarea_in_browser(browser, input_text, activate_browser):
     '''
     # 使用 AppleScript 粘贴剪贴板的内容到 textarea
     paste_and_press_enter = f'''
+        delay 0.5
         tell application "System Events"
             key code 9 using command down
             delay 0.5
@@ -9216,7 +9642,7 @@ def folder_proc(img_folder, step_str, image_inds):
     sd_csuf = common_suffix(sd_img_stems)
 
     if '0' in step_str:
-        frame_data_sorted = step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, image_inds)
+        frame_data_sorted = step0_analyze_frames(img_folder, frame_yml, media_type, auto_subdir, img_inds)
     if '1' in step_str:
         auto_all_masks = step1_analyze_bubbles(img_folder, media_type, auto_subdir)
     if '2' in step_str:
@@ -9227,6 +9653,7 @@ def folder_proc(img_folder, step_str, image_inds):
         else:
             ocr_doc = step3_OCR(img_folder, media_type, media_lang, vert)
             write_docx(ocr_docx, ocr_doc)
+            logger.warning(f'{ocr_docx=}')
     if '4' in step_str:
         step4_readable(img_folder)
     if '5' in step_str:
@@ -9372,6 +9799,7 @@ if __name__ == "__main__":
     font_size_min, font_size_max = parse_range(font_size_range_dic['default'])
     font_size_rarange = app_config.config_data['font_size_rarange']
     font_size_ratio_min, font_size_ratio_max = parse_range(font_size_rarange)
+    bold_thres_dic = app_config.config_data['bold_thres_dic']
     stem_level = app_config.config_data['stem_level']
     media_lang = app_config.config_data['media_lang']
     target_lang = app_config.config_data['target_lang']
@@ -9462,6 +9890,11 @@ if __name__ == "__main__":
         white_tolerance, black_tolerance, normal_tolerance = tolerances
     else:
         white_tolerance = black_tolerance = normal_tolerance = WBN_tolerance
+    textline_hrange = bubble_condition['textline_hrange']
+    line_multi_h = bubble_condition['line_multi_h']
+    line_edge_range = bubble_condition['line_edge_range']
+    dot_line_h = bubble_condition['dot_line_h']
+    dot_h = bubble_condition['dot_h']
 
     area_min, area_max = parse_range(area_range)
     perimeter_min, perimeter_max = parse_range(perimeter_range)
@@ -9494,6 +9927,8 @@ if __name__ == "__main__":
     textblock_letters_min, textblock_letters_max = parse_range(textblock_letters_range)
     note_area_min, note_area_max = parse_range(note_area_range)
     seg_line_min, seg_line_max = parse_range(seg_line_range)
+    textline_h_min, textline_h_max = parse_range(textline_hrange)
+    line_edge_min, line_edge_max = parse_range(line_edge_range)
 
     char_condition = app_config.config_data['char_condition']
     px_area_range = char_condition['px_area_range']
@@ -9535,15 +9970,17 @@ if __name__ == "__main__":
 
     ocr_settings = app_config.config_data['ocr_settings']
     discard_ratio = ocr_settings['discard_ratio']
-    bold_thres = ocr_settings['bold_thres']
     y_thres = ocr_settings['y_thres']
     bit_thres = ocr_settings['bit_thres']
     min_char_area = ocr_settings['min_char_area']
+    min_cnt_area = ocr_settings['min_cnt_area']
+    white_thres = ocr_settings['white_thres']
     cal_method = ocr_settings['cal_method']
     print_tables = ocr_settings['print_tables']
     init_ocr = ocr_settings['init_ocr']
     use_textwords = ocr_settings['use_textwords']
-    stitch_spacing = ocr_settings['stitch_spacing']
+    line_spacing = ocr_settings['line_spacing']
+    bubble_spacing = ocr_settings['bubble_spacing']
     merge_update = ocr_settings['merge_update']
     all_caps = ocr_settings['all_caps']
 
@@ -9655,16 +10092,16 @@ if __name__ == "__main__":
     elif do_dev_folder:
         logger.debug(f'{folder_name=}')
         logger.info(f'{step_str=}')
-        image_inds = [
+        img_inds = [
             # 12,
             # 14,
             # 16,
         ]
-        folder_proc(img_folder, step_str, image_inds)
+        folder_proc(img_folder, step_str, img_inds)
     elif do_dev_pic:
         img_file = img_list[img_ind]
-        image_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
-        ih, iw = image_raw.shape[0:2]
+        img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
+        ih, iw = img_raw.shape[0:2]
 
         frame_yml = img_folder.parent / f'{img_folder.name}.yml'
         order_yml = img_folder.parent / f'{img_folder.name}-气泡排序.yml'
@@ -9722,3 +10159,4 @@ if __name__ == "__main__":
             ocr_doc = Document()
             ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, img_ind, img_list)
             write_docx(pic_ocr_docx, ocr_doc)
+            logger.warning(f'{pic_ocr_docx=}')
