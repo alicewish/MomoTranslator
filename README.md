@@ -47,6 +47,21 @@ python --version
 pip install -r requirements.txt
 ```
 
+另外，`en_core_web_sm`的安装需要科学上网，然后根据系统在终端运行对应的语句：
+```bash
+python3 -m spacy download en_core_web_sm #Mac
+python.exe -m spacy download en_core_web_sm #Win
+```
+
+nltk数据库安装则需要python中执行如下脚本：
+```python
+import nltk
+nltk.download('words')
+nltk.download('names')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+```
+
 ## 使用
 
 在命令行中，进入到项目文件夹并运行pyqt5_momotranslator.py文件：

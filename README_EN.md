@@ -43,6 +43,21 @@ Install the necessary Python libraries with the following command:
 
 `pip install -r requirements.txt` 
 
+To download `en_core_web_sm`, run the proper command in terminal：
+```bash
+python3 -m spacy download en_core_web_sm #Mac
+python.exe -m spacy download en_core_web_sm #Win
+```
+
+To download nltk data, run the following code in python：
+```python
+import nltk
+nltk.download('words')
+nltk.download('names')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+```
+
 ## Usage
 
 In the command line, navigate to the project folder and execute the file pyqt5\_momotranslator.py:
