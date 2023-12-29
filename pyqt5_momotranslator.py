@@ -1,11 +1,3 @@
-import codecs
-import os
-import os.path
-import pickle
-import re
-import string
-import sys
-import webbrowser
 from collections import Counter, OrderedDict, defaultdict
 from colorsys import hsv_to_rgb, rgb_to_hsv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -36,12 +28,6 @@ from typing import Union
 from unicodedata import normalize
 from uuid import getnode, uuid4
 from warnings import filterwarnings
-
-import numpy as np
-import pyperclip
-import spacy
-import xmltodict
-import yaml
 from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import fromarray
 from PyQt6.QtCore import QPointF, QRectF, QSettings, QSize, QTranslator, Qt, pyqtSignal
@@ -56,9 +42,9 @@ from aip import AipOcr
 from bs4 import BeautifulSoup, NavigableString, Tag
 from cv2 import BORDER_CONSTANT, CHAIN_APPROX_SIMPLE, COLOR_BGR2BGRA, COLOR_BGR2GRAY, COLOR_BGR2RGB, COLOR_BGRA2BGR, \
     COLOR_BGRA2RGBA, COLOR_GRAY2BGR, COLOR_GRAY2BGRA, COLOR_RGB2BGR, FILLED, INTER_LINEAR, RETR_EXTERNAL, RETR_LIST, \
-    RETR_TREE, THRESH_BINARY, add, arcLength, bitwise_and, bitwise_not, \
-    boundingRect, circle, contourArea, copyMakeBorder, cvtColor, dilate, dnn, drawContours, erode, findContours, \
-    imdecode, imencode, inRange, line, mean, moments, pointPolygonTest, rectangle, resize, subtract, threshold
+    RETR_TREE, THRESH_BINARY, add, arcLength, bitwise_and, bitwise_not, boundingRect, circle, contourArea, \
+    copyMakeBorder, cvtColor, dilate, dnn, drawContours, erode, findContours, imdecode, imencode, inRange, line, mean, \
+    moments, pointPolygonTest, rectangle, resize, subtract, threshold
 from deep_translator import GoogleTranslator
 from docx import Document
 from docx.shared import Inches
@@ -87,6 +73,19 @@ from shapely.geometry import LineString, MultiLineString, MultiPoint, Point, Pol
 from shapely.ops import nearest_points
 from skimage.segmentation import watershed
 from webcolors import CSS3_HEX_TO_NAMES, hex_to_rgb, name_to_rgb, rgb_to_name
+import codecs
+import numpy as np
+import os
+import os.path
+import pickle
+import pyperclip
+import re
+import spacy
+import string
+import sys
+import webbrowser
+import xmltodict
+import yaml
 
 use_torch = True
 # use_torch = False
@@ -9609,8 +9608,257 @@ def step5_translate(img_folder):
                 write_docx(dst_docx, dst_doc)
 
 
+# @logger.catch
+def colored_text(text, color):
+    colors = {
+        'blue': '\033[94m',
+        'green': '\033[92m',
+        'purple': '\033[95m',
+        'highlight': '\033[91m',
+        'end': '\033[0m'
+    }
+    return colors[color] + text + colors['end']
+
+
+def filter_w_bounds(data, key=lambda x: x):
+    """
+    过滤掉列表中指定比例的最高和最低值。
+
+    :param data: 列表数据。
+    :param key: 用于提取比较值的函数。
+    :param discard_ratio: 要丢弃的数据比例。
+    :return: 过滤后的列表。
+    """
+    if not data:
+        return []
+
+    # 根据提供的键函数排序
+    sorted_data = sorted(data, key=key)
+    discard_count = int(discard_ratio * len(sorted_data))
+
+    # 计算上下界
+    lower_bound = key(sorted_data[discard_count])
+    upper_bound = key(sorted_data[-discard_count - 1])
+
+    # 过滤数据
+    return [x for x in data if lower_bound - 1 <= key(x) <= upper_bound + 1]
+
+
+@timer_decorator
 @logger.catch
-def folder_proc(img_folder, step_str, image_inds):
+def get_area_dic(area_folder_names):
+    # 设置最小有效数据长度
+    min_data_len = 28
+    area_data = defaultdict(list)
+    area_dic = {}
+    all_data = []
+    if area_folder_names is None:
+        area_folder_names = []
+
+    # ================加载文件夹数据================
+    # 遍历每个文件夹名称
+    for area_folder_name in area_folder_names:
+        # 构造文件夹路径
+        area_img_folder = ComicProcess / area_folder_name
+        sub_area_yml = area_img_folder.parent / f'{area_img_folder.name}-文字面积.yml'
+        sub_area_data = iload_data(sub_area_yml)
+        for key, val in sub_area_data.items():
+            area_data[key].extend(val)
+
+    # ================加载气泡文字颜色对和对应单词的数据================
+    for color_locate in area_data:
+        words_w_format_str = area_data[color_locate]
+        words_w_format_str.sort()
+        raw_words_data = []
+        for w in range(len(words_w_format_str)):
+            word_w_format_str = words_w_format_str[w]
+            parts = word_w_format_str.rsplit('|', 2)
+            if len(parts) == 2:
+                word = parts[0]
+                word_format = ''
+                nums_str = parts[1]
+            elif len(parts) == 3:
+                word = parts[0]
+                word_format = parts[1]
+                nums_str = parts[2]
+            else:
+                # 如果parts的长度大于3，那么word中可能包含'|'字符
+                word = '|'.join(parts[:-2])
+                word_format = parts[-2]
+                nums_str = parts[-1]
+            # 解析高度和黑色像素面积
+            height, black_px_area = map(int, nums_str.split(','))
+            raw_word_data = (word, word_format, height, black_px_area)
+            raw_words_data.append(raw_word_data)
+        data_tup = (color_locate, raw_words_data)
+        all_data.append(data_tup)
+
+    for data_tup in all_data:
+        color_locate, raw_words_data = data_tup
+        print(color_locate)
+        # 如果数据长度满足最小要求
+        if len(raw_words_data) >= min_data_len:
+            # 对数据进行过滤和排序
+            words_data = filter_w_bounds(raw_words_data, key=lambda x: x[2])
+            logger.debug(f'{len(raw_words_data)=}, {len(words_data)=}')
+            # 对words_data进行处理，把表示我的I替换成|
+            for a, (word, word_format, height, area) in enumerate(words_data):
+                # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
+                word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', word)
+                words_data[a] = (word, word_format, height, area)
+
+            # 获取所有独特的字符
+            appeared_chars = set()
+            unique_chars = set(''.join([word for word, word_format, height, black_px_area in words_data]))
+            formatted_chars = set()
+            # 为每个字符添加格式变体
+            for char in unique_chars:
+                formatted_chars.add(char)  # 无格式字符
+                formatted_chars.add(f"{char}_b")  # 粗体字符
+                formatted_chars.add(f"{char}_i")  # 斜体字符
+                formatted_chars.add(f"{char}_bi")  # 粗斜体字符
+            # 创建字符到索引的映射
+            char2index = {char: index for index, char in enumerate(formatted_chars)}
+
+            # 初始化矩阵和向量
+            A = zeros((len(words_data), len(formatted_chars)))
+            b = zeros(len(words_data))
+            weights = zeros(len(words_data))
+            # 填充矩阵和向量
+            for n, (word, word_format, height, area) in enumerate(words_data):
+                for char in word:
+                    char_key = char
+                    if word_format != '':
+                        char_key += f'_{word_format}'
+                        # logger.debug(f'{char_key=}')
+                    A[n, char2index[char_key]] += 1
+                    appeared_chars.add(char_key)
+                b[n] = area
+                weights[n] = len(word)
+
+            # 构建加权矩阵
+            W = np.diag(np.sqrt(weights))
+            WA = W @ A
+            Wb = W @ b
+            logger.warning(f'{cal_method=}')
+            if cal_method == '加权最小二乘法':
+                # 使用加权最小二乘法解方程组
+                x, residuals, rank, s = np.linalg.lstsq(WA, Wb, rcond=None)
+                # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
+            elif cal_method == '非负最小二乘法':
+                # 使用非负最小二乘法解方程组
+                x, residuals = nnls(WA, Wb)
+                # x 是一个向量，其中每个元素是一个字符的期望黑色像素面积
+            else:
+                # 加权非负最小二乘法
+                # 设置非负约束
+                bounds = (min_char_area, np.inf)
+                result = lsq_linear(WA, Wb, bounds=bounds)
+                x = result.x
+            # 构建字符到面积的映射
+            char_to_area = {char: max(min_char_area, x[char2index[char]]) for char in formatted_chars}
+
+            # 输出结果
+            char_table = PrettyTable()
+            char_table.field_names = ["Character", "Expected Area", "Bold", "Italic", "Bold Italic"]
+            for char in sorted(unique_chars):
+                row = [
+                    char,
+                    round(char_to_area[char], 2) if char in appeared_chars else '',
+                    round(char_to_area[f"{char}_b"], 2) if f"{char}_b" in appeared_chars else '',
+                    round(char_to_area[f"{char}_i"], 2) if f"{char}_i" in appeared_chars else '',
+                    round(char_to_area[f"{char}_bi"], 2) if f"{char}_bi" in appeared_chars else ''
+                ]
+                char_table.add_row(row)
+            if print_tables:
+                print(char_table)
+
+            word_table = PrettyTable()
+            word_table.field_names = ['Word', 'Actual Area', 'Expected Area', 'Difference']
+            for word, word_format, height, area in sorted(words_data, key=lambda x: x[0]):
+                color_map = {
+                    '': word,
+                    'b': colored_text(word, 'blue'),
+                    'i': colored_text(word, 'green'),
+                    'bi': colored_text(word, 'purple')
+                }
+                colored_word = f"{color_map[word_format]}[{height}]"
+                expect_area = sum(
+                    [char_to_area[char + ('' if word_format == '' else f'_{word_format}')] for char in word])
+                difference = round(expect_area - area, 2)
+                if abs(difference) >= 0.2 * area:
+                    difference = colored_text(str(difference), 'highlight')
+                word_table.add_row([colored_word, area, round(expect_area, 2), difference])
+            if print_tables:
+                print(word_table)
+            # 创建字典来存储字符和其期望的面积
+            char_area_dict = {char: round(char_to_area[char], 2) for char in appeared_chars}
+
+            # 创建字典来存储单词（包括格式后缀）和其期望的面积，以及另一个字典来存储单词的实际面积列表
+            word_area_dict = {}
+            word_actual_areas_dict = {}
+
+            for word, word_format, height, actual_area in words_data:
+                word_key = word + ('' if word_format == '' else f'_{word_format}')
+                expect_area = sum(
+                    [char_to_area[char + ('' if word_format == '' else f'_{word_format}')] for char in word])
+                if word_key not in word_area_dict:
+                    word_area_dict[word_key] = [expect_area]
+                    word_actual_areas_dict[word_key] = [actual_area]
+                else:
+                    word_area_dict[word_key].append(expect_area)
+                    word_actual_areas_dict[word_key].append(actual_area)
+
+            # 计算字符出现次数
+            char_count = {}
+            for word, word_format, height, area in words_data:
+                for char in word:
+                    char_key = char + ('' if word_format == '' else f'_{word_format}')
+                    char_count[char_key] = char_count.get(char_key, 0) + 1
+
+            # 输出结果
+            seg_char_table = PrettyTable()
+            seg_char_table.field_names = ["#", "Character", "Expected Area"]
+            for idx, (char, area) in enumerate(sorted(char_area_dict.items()), 1):
+                count_suffix = f"[{char_count[char]}]" if char in char_count and char_count[char] > 1 else ""
+                seg_char_table.add_row([idx, char, f"{area}{count_suffix}"])
+            if print_tables:
+                print(seg_char_table)
+            seg_word_table = PrettyTable()
+            seg_word_table.field_names = ['#', 'Word', 'Expected Area', 'Actual Areas']
+            for idx, (word_key, areas) in enumerate(sorted(word_area_dict.items()), 1):
+                avg_expect_area = round(sum(areas) / len(areas), 2)
+                # ================简化Actual Areas的表示================
+                areas = word_actual_areas_dict[word_key]
+                areas.sort()
+                simplified = []
+                start = areas[0]
+                end = start
+                for i in range(1, len(areas)):
+                    if areas[i] == end + 1:
+                        end = areas[i]
+                    else:
+                        if start == end:
+                            simplified.append(str(start))
+                        else:
+                            simplified.append(f"{start}~{end}")
+                        start = areas[i]
+                        end = start
+                if start == end:
+                    simplified.append(str(start))
+                else:
+                    simplified.append(f"{start}~{end}")
+                simp = ', '.join(simplified)
+                seg_word_row = [idx, word_key, avg_expect_area, simp]
+                seg_word_table.add_row(seg_word_row)
+            if print_tables:
+                print(seg_word_table)
+            area_dic[color_locate] = (char_area_dict, word_actual_areas_dict)
+    return area_dic
+
+
+@logger.catch
+def folder_proc(img_folder, step_str, img_inds):
     frame_yml = img_folder.parent / f'{img_folder.name}.yml'
     ocr_docx = img_folder.parent / f'{img_folder.name}-1识别.docx'
     src_docx = img_folder.parent / f'{img_folder.name}-2校对.docx'
