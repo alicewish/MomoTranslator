@@ -35,7 +35,7 @@ Pure OpenCV comic translation tool
 
 ## 安装
 
-首先，确保您的计算机上已安装Python 3.9或更高版本。您可以通过在命令行输入以下命令来检查Python版本：
+首先，确保您的计算机上已安装Python 3.10。您可以通过在命令行输入以下命令来检查Python版本：
 ```bash
 python --version
 ```

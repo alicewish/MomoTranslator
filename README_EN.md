@@ -33,7 +33,7 @@ However, with the recent advancements in ChatGPT, there might be new methods to 
 
 ## Installation
 
-First, ensure that you have Python 3.9 or a later version installed on your computer. You can check your Python version by entering the following command in the command line:
+First, ensure that you have Python 3.10. You can check your Python version by entering the following command in the command line:
 
 `python --version` 
 
