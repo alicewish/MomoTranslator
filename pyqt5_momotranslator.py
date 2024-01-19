@@ -255,6 +255,8 @@ scan_tuple = (
     'zSoU-Nerd',
     'zWater',
     'ZZZZZ',
+    'zzzDQzzz',
+    'zzz-mephisto',
 )
 
 spacing_ratio = 0.2
@@ -316,6 +318,7 @@ mark_px = [0, 0, 0, 1]
 
 # rec_pad = 20
 rec_pad = 10
+# rec_pad = 0
 
 pad = 5
 lower_bound_white = array([255 - pad, 255 - pad, 255 - pad])
@@ -593,7 +596,9 @@ kernel10 = kernel(10)
 kernel12 = kernel(12)
 kernel15 = kernel(15)
 kernel20 = kernel(20)
+kernel25 = kernel(25)
 kernel30 = kernel(30)
+kernel35 = kernel(35)
 kernel40 = kernel(40)
 kernel50 = kernel(50)
 kernel60 = kernel(60)
@@ -760,8 +765,8 @@ def filter_items(old_list, prefix=(), infix=scan_tuple, suffix=pic_tuple, item_a
 @logger.catch
 def get_valid_imgs(rootdir, vmode='raw'):
     all_pics = get_files(rootdir, 'pic', True)
-    jpgs = [x for x in all_pics if x.suffix in ('.jpg', '.jpeg')]
-    pngs = [x for x in all_pics if x.suffix == '.png']
+    jpgs = [x for x in all_pics if x.suffix.lower() in ('.jpg', '.jpeg')]
+    pngs = [x for x in all_pics if x.suffix.lower() == '.png']
 
     all_masks = [x for x in pngs if '-Mask-' in x.stem]
     no_masks = [x for x in pngs if '-Mask-' not in x.stem]
@@ -2353,9 +2358,9 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
 
             # ================计算气泡缩小一圈（5像素）内文字像素数量================
             # 步骤1：使用erode函数缩小filled_contour，得到一个缩小的轮廓
-            eroded_contour = erode(filled_contour, kernel5, iterations=1)
-            # 步骤2：从原始filled_contour中减去eroded_contour，得到轮廓的边缘
-            contour_edges = subtract(filled_contour, eroded_contour)
+            contour_e5 = erode(filled_contour, kernel5, iterations=1)
+            # 步骤2：从原始filled_contour中减去contour_e5，得到轮廓的边缘
+            contour_edges = subtract(filled_contour, contour_e5)
             # 步骤3：在letter_mask上统计边缘上的白色像素数量
             edge_pixels = where(contour_edges == 255)
             letter_inner_px_cnt = 0
@@ -2365,9 +2370,9 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
 
             # ================计算气泡扩大一圈（5像素）内文字像素数量================
             # 步骤1：使用dilate函数扩大filled_contour，得到一个扩大的轮廓
-            dilated_contour = dilate(filled_contour, kernel5, iterations=1)
-            # 步骤2：从扩大的dilated_contour中减去原始filled_contour，得到轮廓的外缘
-            contour_outer_edges = subtract(dilated_contour, filled_contour)
+            contour_d5 = dilate(filled_contour, kernel5, iterations=1)
+            # 步骤2：从扩大的contour_d5中减去原始filled_contour，得到轮廓的外缘
+            contour_outer_edges = subtract(contour_d5, filled_contour)
             # 步骤3：在letter_mask上统计外缘上的白色像素数量
             outer_edge_pixels = where(contour_outer_edges == 255)
             letter_outer_px_cnt = 0
@@ -2412,7 +2417,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             condition_b4 = letter_px_min <= letter_px <= letter_px_max
             condition_b5 = BnL_px_ratio_min <= BnL_px_ratio <= BnL_px_ratio_max
             condition_b6 = edge_px_count_min <= letter_inner_px_cnt <= edge_px_count_max
-            condition_b7 = 1.5 <= border_thickness <= 5
+            condition_b7 = 1 <= border_thickness <= 5
             condition_b8 = (len(max_out_letter_cnts) == 0)
             condition_b9 = mask_px_ratio_min <= mask_px_ratio <= mask_px_ratio_max
             condition_b10 = len(dot_cnts) <= 50
@@ -2423,7 +2428,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
                 condition_b3,
                 condition_b4,
                 condition_b5,
-                # condition_b6,
+                condition_b6,
                 # condition_b7,
                 # condition_b8,
                 condition_b9,
@@ -2435,6 +2440,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             if all(condition_bs):
                 good_inds.append(a)
                 # logger.warning(f'{a=}')
+                logger.warning(f'{border_thickness=}')
 
     filter_inds = get_filter_inds(good_inds, hierarchy)
 
@@ -3006,8 +3012,10 @@ class iTextBlock:
             [x + w, y + h],
             [x, y + h]
         ]).reshape((-1, 1, 2)).astype(int32)
-        self.expanded_cnt = Contr(self.expanded_contour)
-        # self.expanded_cnt = self.block_cnt
+        if use_rec:
+            self.expanded_cnt = Contr(self.expanded_contour)
+        else:
+            self.expanded_cnt = self.block_cnt
 
     def add_textline(self, textline):
         self.textlines.append(textline)
@@ -5393,7 +5401,7 @@ def get_textblocks(letter_in_contour, media_type, f=None):
     textlines.sort(key=lambda x: x.br_y)
 
     # ================根据文本行检测文本块================
-    textblocks = []
+    textblocks_raw = []
     textlines4blocks = deepcopy(textlines)
     # 从上到下然后从左到右排序
     textlines4blocks.sort(key=lambda x: (x.br_y, x.br_x))
@@ -5411,8 +5419,9 @@ def get_textblocks(letter_in_contour, media_type, f=None):
                     textlines4blocks.remove(textline)
             if len(textblock.textlines) == len(old_textblock.textlines):
                 break
-        textblocks.append(textblock)
-    textblocks.sort(key=lambda x: x.br_y + x.br_x)
+        textblocks_raw.append(textblock)
+    textblocks_raw.sort(key=lambda x: x.br_y + x.br_x)
+    textblocks = deepcopy(textblocks_raw)
 
     # ================去除相交且相交面积大于等于面积更小的文本块的面积的80%的小文本块================
     i = 0
@@ -5441,18 +5450,21 @@ def get_textblocks(letter_in_contour, media_type, f=None):
         if not is_inside_another:
             filter_textblocks.append(tb1)
     textblocks = filter_textblocks
-
     # ================其他筛选================
     textblocks = [x for x in textblocks if textblock_letters_min <= x.letter_count <= textblock_letters_max]
     textblocks = [x for x in textblocks if
                   textblock_w_percent_min * iw <= x.br_x <= x.br_u <= textblock_w_percent_max * iw]
     textblocks = [x for x in textblocks if
                   textblock_h_percent_min * ih <= x.br_y <= x.br_v <= textblock_h_percent_max * ih]
+
+    logger.warning(f'{len(textblocks_raw)}->{len(filter_textblocks)}->{len(textblocks)}')
+
     if f is None and not color_input:
         # ================无框================
         textblocks = [x for x in textblocks if textblock_area_min <= x.block_cnt.area <= textblock_area_max]
         textblocks = [x for x in textblocks if textblock_wmin <= x.block_cnt.br_w <= textblock_wmax]
         textblocks = [x for x in textblocks if textblock_hmin <= x.block_cnt.br_h <= textblock_hmax]
+        logger.debug(f'{len(textblocks)=}')
     # ================其他排序================
     # if len(textblocks) == 3:
     #     textblocks.sort(key=lambda x: x.br_y)
@@ -5659,6 +5671,21 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
         if len(coords_list) >= 2:
             # 根据坐标列表获取起始点和终点
             p0, p1 = map(lambda coord: tuple(map(floor, coord)), coords_list[:2])
+            logger.debug(f'{cur_pt_center=}, {p0=}, {p1=}, {outline_pt1=}, {outline_pt2=}')
+
+            filled_contour_split = line(filled_contour_split, p0, p1, 0, 2)
+
+            ct1 = pt2tup(textblock_comb[0].block_poly.centroid)
+            ct2 = pt2tup(textblock_comb[1].block_poly.centroid)
+            # 在示意图上绘制从两个文本块中心点连接的线条
+            split_preview = line(split_preview, ct1, ct2, color_maroon, 2)
+            # 在示意图上绘制实际的分割线
+            split_preview = line(split_preview, p0, p1, color_red, 2)
+            if outline_pt1 is not None and outline_pt2 is not None:
+                split_preview = line(split_preview, pt2tup(outline_pt1), pt2tup(outline_pt2), color_slate_blue, 1)
+            # 在示意图上标记分割线的中心点
+            split_preview = circle(split_preview, pt2tup(pt_center), 3, color_yellow, -1)
+            split_preview = circle(split_preview, pt2tup(cur_pt_center), 3, color_blue, -1)
         else:
             logger.error(f'{coords_list=}')
             # 生成示意图
@@ -5666,21 +5693,7 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
             # 保存示意图
             error_preview_png = current_dir / 'error_preview.png'
             write_pic(error_preview_png, error_preview)
-
-        logger.debug(f'{cur_pt_center=}, {p0=}, {p1=}, {outline_pt1=}, {outline_pt2=}')
-        filled_contour_split = line(filled_contour_split, p0, p1, 0, 2)
-
-        ct1 = pt2tup(textblock_comb[0].block_poly.centroid)
-        ct2 = pt2tup(textblock_comb[1].block_poly.centroid)
-        # 在示意图上绘制从两个文本块中心点连接的线条
-        split_preview = line(split_preview, ct1, ct2, color_maroon, 2)
-        # 在示意图上绘制实际的分割线
-        split_preview = line(split_preview, p0, p1, color_red, 2)
-        if outline_pt1 is not None and outline_pt2 is not None:
-            split_preview = line(split_preview, pt2tup(outline_pt1), pt2tup(outline_pt2), color_slate_blue, 1)
-        # 在示意图上标记分割线的中心点
-        split_preview = circle(split_preview, pt2tup(pt_center), 3, color_yellow, -1)
-        split_preview = circle(split_preview, pt2tup(cur_pt_center), 3, color_blue, -1)
+            logger.debug(f'{cur_pt_center=}, {outline_pt1=}, {outline_pt2=}')
 
     contours, _ = findContours(filled_contour_split, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
     seg_cnts = [Contr(contour) for contour in contours if Contr(contour).area >= area_min]
@@ -5850,6 +5863,7 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
         color_letter = Color(cp_letter)
     letter_mask = color_letter.get_range_img(img_raw)
 
+    # ================无框================
     if color_bubble is None:
         # ================排除已经识别的气泡================
         mask_pics = [x for x in all_masks if x.stem.startswith(img_file.stem)]
@@ -5866,6 +5880,7 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
             ret, CTD_mask = threshold(CTD_mask, 127, 255, THRESH_BINARY)
             letter_mask = bitwise_and(letter_mask, CTD_mask)
 
+        # letter_mask = dilate(letter_mask, kernel3, iterations=1)
         all_textblocks = get_textblocks(letter_mask, media_type)
         ordered_cnts = [x.expanded_cnt for x in all_textblocks]
 
@@ -5914,14 +5929,15 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
                         int_values_opt = list(map(int, findall(r'\d+', frame_grid_str_opt)))
                         x_opt, y_opt, w_opt, h_opt, _, _, _, _ = int_values_opt
                         rect_opt = (x_opt, y_opt, w_opt, h_opt)
-                        dist2rect = get_dist2rect(single_cnt.polygon.centroid, rect_opt)
-                        dists.append(dist2rect)
-
-                    # 寻找最小距离及其对应的frame_grid的索引
-                    closest_dist = min(dists)
-                    closest_frame_idx = dists.index(closest_dist)
-                    if closest_frame_idx == f:
-                        single_cnts_grid.append(single_cnt)
+                        if single_cnt.polygon:
+                            dist2rect = get_dist2rect(single_cnt.polygon.centroid, rect_opt)
+                            dists.append(dist2rect)
+                    if dists:
+                        # 寻找最小距离及其对应的frame_grid的索引
+                        closest_dist = min(dists)
+                        closest_frame_idx = dists.index(closest_dist)
+                        if closest_frame_idx == f:
+                            single_cnts_grid.append(single_cnt)
 
             if media_type == 'Manga':
                 ax = -1
@@ -6015,6 +6031,62 @@ def step1_analyze_bubbles(img_folder, media_type, auto_subdir):
     return auto_all_masks
 
 
+# ================获取气泡内的文字================
+def get_right_mask(letter_mask, bit_white_bubble, color_bubble, single_cnt):
+    ih, iw = letter_mask.shape[0:2]
+    black_bg = zeros((ih, iw), dtype=uint8)
+    mask = bit_white_bubble
+    letter_in_bubble_raw = bitwise_and(letter_mask, letter_mask, mask=bit_white_bubble)
+    if has_decoration:
+        # ================有装饰线================
+        if color_bubble is None or single_cnt.area <= 900:
+            # 无框或气泡较小
+            pass
+        else:
+            if single_cnt.area <= 30000:
+                kernel = kernel30
+            elif single_cnt.area <= 40000:
+                kernel = kernel35
+            else:
+                kernel = kernel40
+            bit_white_bubble_ero = erode(bit_white_bubble, kernel, iterations=1)
+            bit_white_bubble_ero_inv = bitwise_not(bit_white_bubble_ero)
+            outline_mask = bitwise_and(bit_white_bubble, bit_white_bubble, mask=bit_white_bubble_ero_inv)
+            letter_outline = bitwise_and(letter_mask, letter_mask, mask=outline_mask)
+            # 获取所有非零像素的坐标
+            px_pts = transpose(nonzero(letter_outline))
+            # 计算非零像素的数量
+            px_area = px_pts.shape[0]
+            if px_area <= 10:
+                # 可能文字靠近边缘
+                pass
+            else:
+                all_x = px_pts[:, 1]
+                all_y = px_pts[:, 0]
+                raw_min_x, raw_max_x = np.min(all_x), np.max(all_x)
+                raw_min_y, raw_max_y = np.min(all_y), np.max(all_y)
+                raw_w = raw_max_x - raw_min_x
+                raw_h = raw_max_y - raw_min_y
+                if raw_w <= 0.6 * single_cnt.br_w or raw_h <= 0.6 * single_cnt.br_h:
+                    # 可能文字靠近边缘
+                    pass
+                else:
+                    mask = bit_white_bubble_ero.copy()
+                    letter_contours_raw, _ = findContours(letter_in_bubble_raw, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+                    for contour in letter_contours_raw:
+                        cnt = Contr(contour)
+                        if cnt.area >= 2:
+                            contour_mask = drawContours(black_bg.copy(), [cnt.contour], -1, 255, -1)
+                            # 计算当前轮廓与outline_mask的交集
+                            intersection_mask = bitwise_and(contour_mask, outline_mask)
+                            has_white = np.any(intersection_mask == 255)
+                            if has_white:
+                                # 有交集，将当前轮廓涂黑到mask中
+                                drawContours(mask, [cnt.contour], -1, 0, FILLED)
+                                # pass
+    return mask
+
+
 # @logger.catch
 # @timer_decorator
 def get_single_cnts(img_raw, mask_pics):
@@ -6056,6 +6128,7 @@ def get_single_cnts(img_raw, mask_pics):
         cp_bubble, cp_letter = color_pattern
 
         if cp_bubble == '':
+            # 无框
             color_bubble = None
         elif isinstance(cp_bubble, list):
             # 气泡为渐变色
@@ -6085,12 +6158,16 @@ def get_single_cnts(img_raw, mask_pics):
 
                 # 获取原始图像在bit_white_bubble范围内的图像，其他部分为气泡颜色
                 img_bubble_only = bitwise_and(img_raw, img_raw, mask=bit_white_bubble)
-                if color_bubble is not None:
+                if color_bubble is None:
+                    # 无框，掩模中黑色部分用白色
+                    img_bubble_only[bit_white_bubble == 0] = (255, 255, 255)
+                else:
+                    # 掩模中黑色部分用气泡原本的颜色
                     img_bubble_only[bit_white_bubble == 0] = color_bubble.rgb
                 img_bubble_only_inv = bitwise_not(img_bubble_only)
 
-                # 获取气泡内的文字
-                letter_in_bubble = bitwise_and(letter_mask, letter_mask, mask=bit_white_bubble)
+                mask = get_right_mask(letter_mask, bit_white_bubble, color_bubble, single_cnt)
+                letter_in_bubble = bitwise_and(letter_mask, letter_mask, mask=mask)
                 letter_in_bubble_inv = bitwise_not(letter_in_bubble)
 
                 # 获取所有非零像素的坐标
@@ -6122,8 +6199,10 @@ def get_single_cnts(img_raw, mask_pics):
                     letter_coors = (raw_min_x, raw_min_y, raw_max_x, raw_max_y, min_x, min_y, max_x, max_y, center_pt)
 
                     if isinstance(cp_bubble, list):
+                        # 渐变框
                         mod_img = letter_in_bubble_inv.copy()
                     elif color_bubble is None:
+                        # 无框
                         if color_letter.rgb_str == 'ffffff':
                             # 文字颜色为白色
                             mod_img = letter_in_bubble_inv.copy()
@@ -7601,7 +7680,7 @@ def get_dst_font_size(src_font_size, bubble_color_str, letter_color_str):
     if font_size_ratio_min <= src_font_size / global_font_size <= font_size_ratio_max:
         dst_font_size = global_font_size
     else:
-        dst_font_size = round(src_font_size * 1.2 / 5) * 5
+        dst_font_size = round(src_font_size * 1.2 / base_num) * base_num
     color_locate = f"{bubble_color_str}-{letter_color_str}"
     # logger.debug(f'{color_locate=}')
     if color_locate in font_size_range_dic:
@@ -8698,7 +8777,7 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
                     pchars = [char for char in line_word if char in char_area_dict]
                     npchars = [char for char in line_word if char not in char_area_dict]
                     run_info = (line_word, '')
-                    if color_locate in italic_color_locates:
+                    if italic_color_locates and color_locate in italic_color_locates:
                         run_info = (line_word, 'i')
                     # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
                     line_word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', line_word)
@@ -8860,7 +8939,8 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
             # 添加最后一个图像
             long_img.paste(all_cropped_imgs[-1], ((max_width - all_cropped_imgs[-1].width) // 2, y_offset))
             long_img = add_pad2img(long_img, 20, color_white)
-            write_pic(pic_text_png, long_img)
+            if not pic_text_png.exists() or force_renew:
+                write_pic(pic_text_png, long_img)
     else:
         logger.error(f'{page_ind=}')
     return ocr_doc, all_cropped_imgs
@@ -8902,14 +8982,19 @@ def merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems):
 
             for r in range(len(sd_para.runs)):
                 sd_run = sd_para.runs[r]
+                sd_text = sd_run.text
+                sd_textlines = sd_text.splitlines()
                 if r == 0:
-                    first_line = sd_run.text.splitlines()[0]
-                    text_to_add = sd_run.text.removeprefix(f'{first_line}\n')
+                    if sd_textlines:
+                        first_line = sd_textlines[0]
+                    else:
+                        first_line = ''
+                    text2add = sd_text.removeprefix(f'{first_line}\n')
                 else:
-                    text_to_add = sd_run.text
+                    text2add = sd_text
 
-                if text_to_add:
-                    new_run = hd_para.add_run(text_to_add)
+                if text2add:
+                    new_run = hd_para.add_run(text2add)
                     new_run.font.bold = sd_run.font.bold
                     new_run.font.italic = sd_run.font.italic
                     new_run.font.underline = sd_run.font.underline
@@ -8962,6 +9047,12 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
             for future in as_completed(futures):
                 pic_results = future.result()
                 all_pic_results.append(pic_results)
+        for i, item in enumerate(all_pic_results):
+            if item is None or not isinstance(item, list) or not item:
+                logger.error(f"错误的元素在索引 {i}: {item}")
+            elif len(item[0]) < 2:
+                logger.error(f"元素结构不正确在索引 {i}: {item}")
+        all_pic_results = [x for x in all_pic_results if x is not None]
         all_pic_results.sort(key=lambda x: x[0][1])
 
     ocr_doc = Document()
@@ -9003,15 +9094,31 @@ def create_para_dic(file_stems, index_dict, indexes, lines, html_format=False):
     return para_dic
 
 
+@logger.catch
+def get_format_code(run):
+    format_code = 0
+    if run.italic:
+        format_code += 1
+    if run.bold:
+        format_code += 2
+    if run.underline:
+        format_code += 4
+    return format_code
+
+
+@logger.catch
 def get_para_text_line(valid_para_lines):
     # 将每句话首字母大写
     single_line_text = ' '.join(valid_para_lines)
     # 将文本分割成句子并保留句末标点符号
     sentence_parts = re.split(r'( *[.?!…]+[\'")\]，。？！]* *)', single_line_text)
-    # 对每个句子进行首字母大写处理
-    capitalized_parts = [x.capitalize() for x in sentence_parts]
+    if do_cap:
+        # 对每个句子进行首字母大写处理
+        format_parts = [x.capitalize() for x in sentence_parts]
+    else:
+        format_parts = sentence_parts
     # 将处理后的句子连接成一个字符串
-    para_text_line = ''.join(capitalized_parts).strip()
+    para_text_line = ''.join(format_parts).strip()
     return para_text_line
 
 
@@ -9056,42 +9163,99 @@ def step4_readable(img_folder):
     readable_doc = Document()
     # 把每个段落的多行文本改成单行文本，同时保留原始格式和样式
     for p in range(len(ocr_doc.paragraphs)):
+        # ================每个段落================
         paragraph = ocr_doc.paragraphs[p]
-        # 去除图片名称所在的行
-        if p not in ocr_docx_inds:
+        runs_text = []
+        runs_format = []
+        format_codes = []
+        if p in ocr_docx_inds:
+            # 图片名称所在的段落不处理
+            pass
+        elif paragraph.text.strip() == '':
+            # 空段落及图片段落不处理
+            pass
+        else:
+            # OCR识别段落
             para_text = paragraph.text
             para_lines = para_text.splitlines()
             if len(para_lines) >= 2:
                 meta_line = para_lines[0]
                 valid_para_lines = para_lines[1:]
-
                 para_text_line = get_para_text_line(valid_para_lines)
                 if para_text_line != '':
-                    new_para = readable_doc.add_paragraph()
                     start_pos = 0
                     runs = paragraph.runs
                     for r in range(len(runs)):
                         run = runs[r]
                         run_text_raw = run.text
+                        # ================换行改成空格================
                         run_text = run_text_raw.replace('\n', ' ')
-                        # 删除Meta数据行
                         if r == 0:
-                            new_run_text_raw = run_text.removeprefix(meta_line).removeprefix(' ')
+                            # ================移除Meta数据行================
+                            new_run_text_raw = run_text.removeprefix(meta_line)
+                            new_run_text_raw = new_run_text_raw.removeprefix(' ')
                             end_pos = start_pos + len(new_run_text_raw)
                         else:
                             end_pos = start_pos + len(run_text)
+                        # ================截取文本并更新起始位置================
                         new_run_text = para_text_line[start_pos:end_pos]
                         start_pos = end_pos
 
-                        new_run = new_para.add_run(new_run_text)
-                        new_run.bold = run.bold
-                        new_run.italic = run.italic
-                        new_run.underline = run.underline
-                        new_run.font.strike = run.font.strike
-                        new_run.font.highlight_color = run.font.highlight_color
-                        new_run.font.color.rgb = run.font.color.rgb
+                        if new_run_text != '':
+                            format_code = get_format_code(run)
+                            runs_text.append(new_run_text)
+                            runs_format.append(run)
+                            format_codes.append(format_code)
+
+        if runs_text:
+            if len(runs_text) >= 3 and ' ' in runs_text[1:-1] and max(format_codes) > 0:
+                # 找到所有单个空格字符串的位置
+                space_indices = [index for index, item in enumerate(runs_text) if item == " "]
+                space_indices = [x for x in space_indices if 1 <= x <= len(runs_text) - 1]
+                merged_runs_text = []
+                merged_runs_format = []
+                merged_format_codes = []
+                roi_indices = []
+                for s in range(len(space_indices)):
+                    space_indice = space_indices[s]
+                    format_before = format_codes[space_indice - 1]
+                    format_after = format_codes[space_indice + 1]
+                    if format_before == format_after > 0:
+                        roi_indices.append(space_indice)
+
+                for r in range(len(runs_text)):
+                    new_run_text = runs_text[r]
+                    run = runs_format[r]
+                    format_code = format_codes[r]
+                    if r + 1 in roi_indices:
+                        new_run_text += runs_text[r + 1]
+                    elif r in roi_indices:
+                        new_run_text = ''
+                    if new_run_text != '':
+                        merged_runs_text.append(new_run_text)
+                        merged_runs_format.append(run)
+                        merged_format_codes.append(format_code)
+
+                if roi_indices:
+                    logger.debug(f'{roi_indices=}')
+            else:
+                merged_runs_text = runs_text
+                merged_runs_format = runs_format
+                merged_format_codes = format_codes
+
+            new_para = readable_doc.add_paragraph()
+            for new_run_text, run, format_code in zip(merged_runs_text, merged_runs_format, merged_format_codes):
+                new_run = new_para.add_run(new_run_text)
+                new_run.bold = run.bold
+                new_run.italic = run.italic
+                new_run.underline = run.underline
+                new_run.font.strike = run.font.strike
+                new_run.font.highlight_color = run.font.highlight_color
+                new_run.font.color.rgb = run.font.color.rgb
     write_docx(read_docx, readable_doc)
     logger.warning(f'{read_docx=}')
+
+    # ================转为英文段落================
     with open(read_docx, 'rb') as docx_file:
         result = convert_to_html(docx_file)
         result_html = result.value
@@ -9111,6 +9275,7 @@ def step4_readable(img_folder):
             # 查找并显示这一行中的俄罗斯字母
             print(f"{''.join(russian_chars)}")
 
+    # ================生成拼接段落================
     if stitch_docx.exists():
         stitch_doc = Document(stitch_docx)
         # 读取并连接文档中的所有段落文本
@@ -9408,7 +9573,12 @@ def step5_chatgpt_translate(read_html, raw_html, target_lang):
         current_lines = split_lines[s]
         current_text = lf.join(current_lines)
         full_prompt = f'{prompt_prefix}{lf}```html{lf}{current_text}{lf}```'
-        index_user = target_divs.index(full_prompt)
+        try:
+            index_user = target_divs.index(full_prompt)
+        except Exception as e:
+            print()
+            continue
+        logger.debug(f'{index_user=}')
         index_chatgpt = index_user + 1
         gpt_html = target_divs[index_chatgpt]
         # logger.info(gpt_html)
@@ -9425,6 +9595,11 @@ def step5_chatgpt_translate(read_html, raw_html, target_lang):
         # 输出结果
         # unescaped_texts.append(unescaped_text.strip())
         unescaped_texts.append(code_text)
+        input_len = len(current_lines)
+        output_len = len(code_text.strip().splitlines())
+        if output_len != input_len:
+            logger.warning(f'{output_len=}, {input_len=}')
+            logger.error(f'{current_text}')
     dst_html_text = lf.join(unescaped_texts)
     print(dst_html_text)
     write_txt(raw_html, dst_html_text)
@@ -10209,6 +10384,7 @@ if __name__ == "__main__":
     r_dot = bubble_recognize['r_dot']
 
     bubble_seg = app_config.config_data['bubble_seg']
+    use_rec = bubble_seg['use_rec']
     use_dilate = bubble_seg['use_dilate']
     adapt_big_letter = bubble_seg['adapt_big_letter']
     check_note = bubble_seg['check_note']
@@ -10223,6 +10399,7 @@ if __name__ == "__main__":
     min_char_area = ocr_settings['min_char_area']
     min_cnt_area = ocr_settings['min_cnt_area']
     white_thres = ocr_settings['white_thres']
+    base_num = ocr_settings['base_num']
     cal_method = ocr_settings['cal_method']
     print_tables = ocr_settings['print_tables']
     init_ocr = ocr_settings['init_ocr']
@@ -10231,6 +10408,9 @@ if __name__ == "__main__":
     bubble_spacing = ocr_settings['bubble_spacing']
     merge_update = ocr_settings['merge_update']
     all_caps = ocr_settings['all_caps']
+    do_cap = ocr_settings['do_cap']
+    has_decoration = ocr_settings['has_decoration']
+    force_renew = ocr_settings['force_renew']
 
     baidu_ocr = app_config.config_data['baidu_ocr']
     obd_app_id = baidu_ocr['APP_ID']
