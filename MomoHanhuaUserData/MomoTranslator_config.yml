@@ -1,4 +1,4 @@
-img_ind: 13
+img_ind: 12
 #step_str: '012345678'
 step_str: '5'
 # thread_method: 'queue'
@@ -10,42 +10,43 @@ do_mode: 'do_qt'
 # do_mode: 'do_dev_pic'
 docx_img_format: 'jpeg'
 #docx_img_format: 'png'
-folder_name: 'Avengers 002'
+folder_name: 'Antarctica 001'
 area_folder_names:
-#  - 'Avengers 001'
-#default_dpi: 300
+#   - 'Outsiders 001'
+# default_dpi: 300
+# default_dpi: 200
 default_dpi: 150
 # default_dpi: 96
-#WLB_ext_px: 3,8,8
-# WLB_ext_px: 5,12,12
-WLB_ext_px: 5,20,15
-# WLB_ext_px: 10,40,30
+WLB_ext_px: 8,15,18
+# WLB_ext_px: 12,28,30
 lettering:
 #   global_font_size: 20
+#   global_font_size: 28
   global_font_size: 30
   global_font_name: '微软雅黑'
-#  global_font_name: '思源黑体'
-  #global_font_name: '方正兰亭黑'
+#   global_font_name: '思源黑体'
+#   global_font_name: '方正兰亭黑'
 #  global_rec_font_name: '方正粗宋'
   global_rec_font_name:
   global_spacing:
-  # global_spacing: 2
+#   global_spacing: 8
   check_len: 40
 #browser: 'Safari'
 browser: 'Google Chrome'
 thumb_size: 240
 window_size: 1200,800
-WBLDN_padding: 30,90,90,90,40
+WBLDN_padding: 40,50,50,50,50
+# WBLDN_padding: 30,50,90,90,90
 # WBLDN_padding: 90,90,90,90,90
-# WBLDN_padding: 120,120,120,120,120
+# WBLDN_padding: 30,120,120,120,120
 font_size_range_dic:
   default: '25~60'
   'ffffff-000000': '25~60'
 font_size_rarange: '0.65~1.25'
 bold_thres_dic:
-  default: 1.15
-  'ffffff-000000': 1.2
-  '3948a5-ffffff': 1.5
+  default: 1.5
+#   'ffffff-000000': 1.2
+#   '3948a5-ffffff': 1.5
 stem_level: 3
 media_lang: 'English'
 target_lang: 'zh-CN'
@@ -61,7 +62,7 @@ chatgpt:
   # 是否允许控制浏览器
   do_automate: true
 #   do_automate: false
-  sleep_minute: 2
+  sleep_minute: 3
   gpt_line_max: 40
   gpt_char_max: 1500
 long_pic:
@@ -71,7 +72,7 @@ long_pic:
 #  group_len: 6
 frame_settings:
   frame_color:
-#  frame_color: '000000'
+#   frame_color: '000000'
 #  frame_color: 'ffffff'
   min_frame_length: 3
   edge_size: 10
@@ -116,24 +117,25 @@ bubble_condition:
   br_w_percent_range: '0~1'
 #  br_w_percent_range: '0.05~0.4'
   br_h_percent_range: '0~1'
+#   br_h_percent_range: '0.5~1'
   portion_rarange: '0.00002~0.5'
   area_perimeter_rarange: '0.0005~0.1'
-  bubble_px_range: '20~1000000'
-#  letter_px_range: '280~1000000'
+  bubble_px_range: '100~1000000'
   letter_px_range: '3~1000000'
-  bubble_px_rarange: '0.5~1.1'
+#   letter_px_range: '3~1000000'
+  bubble_px_rarange: '0.3~1.1'
   letter_px_rarange: '0.0008~0.9'
   BnL_px_rarange: '0.5~1.1'
-  mask_px_rarange: '0.005~0.8'
+  mask_px_rarange: '0.05~1'
   edge_px_count_range: '0~15'
   letter_area_range: '1~9000'
-  textblock_area_range: '1~3000000'
-  textblock_wrange: '30~1000'
-  textblock_hrange: '10~600'
+  textblock_area_range: '200~3000000'
+  textblock_wrange: '20~1920'
+  textblock_hrange: '10~1000'
   textblock_w_percent_range: '0~1'
 #  textblock_w_percent_range: '0.3~1'
   textblock_h_percent_range: '0~1'
-#  textblock_h_percent_range: '0.8~0.92'
+#   textblock_h_percent_range: '0.5~1'
   letter_cnts_range: '1~900'
   textblock_letters_range: '1~1000'
   note_area_range: '10~6000'
@@ -149,7 +151,7 @@ bubble_condition:
   dot_line_h: 5
   dot_h: 4
 char_condition:
-  px_area_range: '10~30000'
+  px_area_range: '5~30000'
   cnt_area_range: '10~30000'
   thick_range: '4~4000'
   brw_range: '5~5000'
@@ -166,6 +168,8 @@ bubble_recognize:
   padding: 10
   r_dot: 5
 bubble_seg:
+  use_rec: true
+#   use_rec: false
 #  use_dilate: true
   use_dilate: false
 #  adapt_big_letter: true
@@ -177,7 +181,7 @@ bubble_seg:
   check_intact: true
 #  check_intact: false
   use_pivot_split: true
-#  use_pivot_split: false
+#   use_pivot_split: false
 ocr_settings:
   discard_ratio: 0.08
 #  y_thres: 8
@@ -186,6 +190,8 @@ ocr_settings:
   min_char_area: 3
   min_cnt_area: 9
   white_thres: 200
+  base_num: 5
+#   base_num: 4
 #  cal_method: 加权最小二乘法
 #  cal_method: 非负最小二乘法
   cal_method: 加权非负最小二乘法
@@ -198,9 +204,15 @@ ocr_settings:
   line_spacing: 20
   bubble_spacing: 50
   merge_update: true
-#  merge_update: false
+#   merge_update: false
   all_caps: true
 #  all_caps: false
+  do_cap: true
+#  do_cap: false
+#   has_decoration: true
+  has_decoration: false
+  force_renew: true
+#   force_renew: false
 youdao:
   app_id:
   app_key:
@@ -227,25 +239,21 @@ grid_ratio_dic:
   Manga: 0.90 # 日漫黑白
   Comic: 0.90 # 美漫彩色
 italic_color_locates:
-  - 'fbab3c-fff3e5-000000'
-  - 'ccecc3-36b449'
-  - 'fdfdbd-000000'
-  - '0d0d0d-ffffff'
+#   - 'fbab3c-fff3e5-000000'
+#   - 'ccecc3-36b449'
+#   - 'fdfdbd-000000'
+#   - '0d0d0d-ffffff'
 color_patterns:
 #  - 'ffffff-15~9f2862-15' # 白底红字
 #  - 'b9e6fb-15~000000-60' # 蓝底黑字
-#  - 'fff79a-15~000000-60' # 黄底黑字
 #  - 'fef7e5-15~000000-60' # 米底黑字
 #  - 'ffffff-15~0799b0-60' # 白底蓝字
-#  - '4e4c4d-15~fffcc2-60' # 灰底黄字
-#  - '3948a5-15~ffffff-60' # 蓝底白字
 #  - 'e2e319-15~000000-60' # 绿底黑字
 #  - '010101-15=667b8c-15~ffffff-60' # 黑灰底白字
 #  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
 color_pattern_dic:
   Comic:
     - 'ffffff-15~000000-60' # 白底黑字
-#     - 'ffffff-30~000000-120' # 白底黑字
 #     - '000000-15~ffffff-60' # 黑底白字
 #     - 'ffffff-60' # 白字
 #     - '000000-60' # 黑字
