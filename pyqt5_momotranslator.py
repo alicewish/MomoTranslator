@@ -316,6 +316,7 @@ trans_olive = (0, 128, 128, 128)  # 半透明橄榄色
 
 mark_px = [0, 0, 0, 1]
 
+# rec_pad = 30
 # rec_pad = 20
 rec_pad = 10
 # rec_pad = 0
@@ -1315,7 +1316,7 @@ def crop_img(src_img, br, pad=0):
     return cropped
 
 
-def get_clipboard_data() -> Union[str, None]:
+def get_clipboard_data():
     """
     从剪贴板获取数据
     :return 如果没有错误，返回剪贴板数据；否则返回 None
@@ -1354,7 +1355,7 @@ def a4_apple_script():
     return
 
 
-def remove_common_indent(script: str) -> str:
+def remove_common_indent(script):
     """
     删除脚本中每行开头的相同长度的多余空格
     :param script: 要处理的脚本
@@ -1365,7 +1366,7 @@ def remove_common_indent(script: str) -> str:
     return '\n'.join(line[min_indent:] for line in lines)
 
 
-def run_apple_script(script: str) -> Union[str, None]:
+def run_apple_script(script):
     """
     执行 AppleScript 脚本
     :param script：要执行的 AppleScript 脚本
@@ -1382,7 +1383,7 @@ def run_apple_script(script: str) -> Union[str, None]:
             print(f'{result.err=}')
 
 
-def get_browser_current_tab_url(browser: str) -> str:
+def get_browser_current_tab_url(browser):
     """
     获取浏览器当前标签页的 URL
     :param browser：浏览器名称，可以是 'Safari' 或 'Google Chrome'
@@ -1408,7 +1409,7 @@ def get_browser_current_tab_url(browser: str) -> str:
     return run_apple_script(apple_script)
 
 
-def get_browser_current_tab_title(browser: str) -> str:
+def get_browser_current_tab_title(browser):
     """
     获取浏览器当前标签页的标题
     :param browser：浏览器名称，可以是 'Safari' 或 'Chrome'
@@ -1435,7 +1436,7 @@ def get_browser_current_tab_title(browser: str) -> str:
     return run_apple_script(apple_script)
 
 
-def get_browser_current_tab_html_fg(browser: str) -> str:
+def get_browser_current_tab_html_fg(browser):
     """
     获取浏览器当前标签页的 HTML 内容
     :param browser：浏览器名称，可以是 'Safari' 或 'Chrome'
@@ -1470,7 +1471,7 @@ def get_browser_current_tab_html_fg(browser: str) -> str:
     return run_apple_script(apple_script)
 
 
-def get_browser_current_tab_html(browser: str) -> str:
+def get_browser_current_tab_html(browser):
     """
     获取浏览器当前标签页的 HTML 内容
     :param browser：浏览器名称，可以是 'Safari' 或 'Chrome'
@@ -1503,7 +1504,7 @@ def get_browser_current_tab_html(browser: str) -> str:
     return run_apple_script(apple_script)
 
 
-def open_html_file_in_browser(file_path: str, browser: str) -> None:
+def open_html_file_in_browser(file_path, browser):
     """
     在浏览器中打开 HTML 文件
     :param file_path：HTML 文件的路径
@@ -1812,7 +1813,7 @@ def ibut(text, icon):
     return button
 
 
-def get_search_regex(search_text, case_sensitive, whole_word, use_regex) -> Pattern:
+def get_search_regex(search_text, case_sensitive, whole_word, use_regex):
     """根据搜索条件，返回对应的正则表达式模式对象。"""
 
     # 如果不区分大小写，设置正则标志为忽略大小写
@@ -2432,7 +2433,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
                 # condition_b7,
                 # condition_b8,
                 condition_b9,
-                # condition_b10,
+                condition_b10,
                 condition_b11,
                 # condition_b12,
             ]
@@ -2579,6 +2580,7 @@ class Color:
         self.padding = padding
 
     def get_range_img(self, task_img):
+        task_img = toBGR(task_img)
         frame_mask = inRange(task_img, array(self.ext_lower), array(self.ext_upper))
         return frame_mask
 
@@ -5451,12 +5453,19 @@ def get_textblocks(letter_in_contour, media_type, f=None):
             filter_textblocks.append(tb1)
     textblocks = filter_textblocks
     # ================其他筛选================
-    textblocks = [x for x in textblocks if textblock_letters_min <= x.letter_count <= textblock_letters_max]
-    textblocks = [x for x in textblocks if
-                  textblock_w_percent_min * iw <= x.br_x <= x.br_u <= textblock_w_percent_max * iw]
-    textblocks = [x for x in textblocks if
-                  textblock_h_percent_min * ih <= x.br_y <= x.br_v <= textblock_h_percent_max * ih]
+    textblocks_valid = [x for x in textblocks if textblock_letters_min <= x.letter_count <= textblock_letters_max]
+    if textblocks_valid:
+        textblocks = textblocks_valid
 
+    textblocks_valid = [x for x in textblocks if
+                        textblock_w_percent_min * iw <= x.br_x <= x.br_u <= textblock_w_percent_max * iw]
+    if textblocks_valid:
+        textblocks = textblocks_valid
+
+    textblocks_valid = [x for x in textblocks if
+                        textblock_h_percent_min * ih <= x.br_y <= x.br_v <= textblock_h_percent_max * ih]
+    if textblocks_valid:
+        textblocks = textblocks_valid
     logger.warning(f'{len(textblocks_raw)}->{len(filter_textblocks)}->{len(textblocks)}')
 
     if f is None and not color_input:
@@ -5645,13 +5654,14 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
                 # 不会改变原始图形的形状，但会清除任何存在的几何不规则性，例如自交叉的线条或重叠的点。
                 tb1_sect = sep_line.intersection(textblock1.block_poly.buffer(0))
                 tb2_sect = sep_line.intersection(textblock2.block_poly.buffer(0))
-                comb_len = cnt_line_sect.length + 1000 * (tb1_sect.length + tb2_sect.length)
-                tup = (cur_pt_center, angle, sep_line, cnt_line_sect, tb1_sect, tb2_sect, comb_len)
+                sum_sect = tb1_sect.length + tb2_sect.length
+                comb_len = cnt_line_sect.length + 1000 * sum_sect
+                tup = (cur_pt_center, angle, sep_line, cnt_line_sect, tb1_sect, tb2_sect, sum_sect, comb_len)
                 all_tups.append(tup)
 
         all_tups.sort(key=lambda x: x[-1])
         best_tup = all_tups[0]
-        cur_pt_center, angle, sep_line, cnt_line_sect, tb1_sect, tb2_sect, comb_len = best_tup
+        cur_pt_center, angle, sep_line, cnt_line_sect, tb1_sect, tb2_sect, sum_sect, comb_len = best_tup
         if cnt_line_sect.geom_type == "LineString":
             coords_list = list(cnt_line_sect.coords)
         else:  # cnt_line_sect.geom_type == "MultiLineString":
@@ -5668,7 +5678,7 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
             # 从最近的线段中获取坐标列表
             coords_list = list(closest_linestring.coords)
 
-        if len(coords_list) >= 2:
+        if len(coords_list) >= 2 and sum_sect <= sum_sect_max:
             # 根据坐标列表获取起始点和终点
             p0, p1 = map(lambda coord: tuple(map(floor, coord)), coords_list[:2])
             logger.debug(f'{cur_pt_center=}, {p0=}, {p1=}, {outline_pt1=}, {outline_pt2=}')
@@ -6097,6 +6107,7 @@ def get_single_cnts(img_raw, mask_pics):
     :param mask_pics: 包含掩码图像的列表，这些掩码用于在原始图像中找到气泡。
     :return 单个气泡轮廓及其裁剪后的图像的列表
     """
+    img_raw = toBGR(img_raw)
     ih, iw = img_raw.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
     single_cnts = []
@@ -6813,6 +6824,7 @@ def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media
                 if grid_mask[single_cnt.cy, single_cnt.cx] == 255:
                     single_cnts_grid.append(single_cnt)
             # ================当前画格有可能没有气泡但包含其他画格的气泡的一部分================
+            bulk_cnts_grid = []
             if single_cnts_grid:
                 single_cnts_grid = sorted(single_cnts_grid, key=lambda x: x.br_y)
                 # ================获取高度块================
@@ -9573,33 +9585,38 @@ def step5_chatgpt_translate(read_html, raw_html, target_lang):
         current_lines = split_lines[s]
         current_text = lf.join(current_lines)
         full_prompt = f'{prompt_prefix}{lf}```html{lf}{current_text}{lf}```'
-        try:
+        index_user = None
+        if full_prompt in target_divs:
             index_user = target_divs.index(full_prompt)
-        except Exception as e:
-            print()
-            continue
-        logger.debug(f'{index_user=}')
-        index_chatgpt = index_user + 1
-        gpt_html = target_divs[index_chatgpt]
-        # logger.info(gpt_html)
-
-        gpt_soup = BeautifulSoup(gpt_html, 'html.parser')
-        # 查找 code 标签
-        code_tag = gpt_soup.find('code')
-        if code_tag is None:
-            code_text = gpt_html
         else:
-            code_text = code_tag.get_text().strip()
-        # 对文本内容进行反向转义
-        unescaped_text = unescape(code_text)
-        # 输出结果
-        # unescaped_texts.append(unescaped_text.strip())
-        unescaped_texts.append(code_text)
-        input_len = len(current_lines)
-        output_len = len(code_text.strip().splitlines())
-        if output_len != input_len:
-            logger.warning(f'{output_len=}, {input_len=}')
-            logger.error(f'{current_text}')
+            possible_divs = [x for x in target_divs if full_prompt in x]
+            if possible_divs:
+                possible_div = possible_divs[0]
+                index_user = target_divs.index(possible_div)
+            print()
+        if index_user:
+            logger.debug(f'{index_user=}')
+            index_chatgpt = index_user + 1
+            gpt_html = target_divs[index_chatgpt]
+            # logger.info(gpt_html)
+
+            gpt_soup = BeautifulSoup(gpt_html, 'html.parser')
+            # 查找 code 标签
+            code_tag = gpt_soup.find('code')
+            if code_tag is None:
+                code_text = gpt_html
+            else:
+                code_text = code_tag.get_text().strip()
+            # 对文本内容进行反向转义
+            unescaped_text = unescape(code_text)
+            # 输出结果
+            # unescaped_texts.append(unescaped_text.strip())
+            unescaped_texts.append(code_text)
+            input_len = len(current_lines)
+            output_len = len(code_text.strip().splitlines())
+            if output_len != input_len:
+                logger.warning(f'{output_len=}, {input_len=}')
+                logger.error(f'{current_text}')
     dst_html_text = lf.join(unescaped_texts)
     print(dst_html_text)
     write_txt(raw_html, dst_html_text)
@@ -10072,6 +10089,7 @@ def folder_proc(img_folder, step_str, img_inds):
         step2_order(img_folder, media_type)
     if '3' in step_str:
         if src_docx.exists() and sd_src_docx.exists() and merge_update:
+            logger.warning(f'{sd_src_docx=}')
             merge_update_doc(src_docx, sd_src_docx, img_stems, sd_img_stems)
         else:
             ocr_doc = step3_OCR(img_folder, media_type, media_lang, vert)
@@ -10382,6 +10400,7 @@ if __name__ == "__main__":
         textword_alpha = textline_alpha = textblock_alpha = int(WLB_alpha) / 100
     padding = bubble_recognize['padding']
     r_dot = bubble_recognize['r_dot']
+    sum_sect_max = bubble_recognize['sum_sect_max']
 
     bubble_seg = app_config.config_data['bubble_seg']
     use_rec = bubble_seg['use_rec']
@@ -10411,6 +10430,7 @@ if __name__ == "__main__":
     do_cap = ocr_settings['do_cap']
     has_decoration = ocr_settings['has_decoration']
     force_renew = ocr_settings['force_renew']
+    use_sd = ocr_settings['use_sd']
 
     baidu_ocr = app_config.config_data['baidu_ocr']
     obd_app_id = baidu_ocr['APP_ID']
