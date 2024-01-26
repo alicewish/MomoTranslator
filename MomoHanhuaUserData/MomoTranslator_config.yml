@@ -1,6 +1,6 @@
-img_ind: 12
+img_ind: 31
 #step_str: '012345678'
-step_str: '5'
+step_str: '1'
 # thread_method: 'queue'
 thread_method: 'concurrent'
 # pic_thread_method: 'queue'
@@ -10,14 +10,14 @@ do_mode: 'do_qt'
 # do_mode: 'do_dev_pic'
 docx_img_format: 'jpeg'
 #docx_img_format: 'png'
-folder_name: 'Antarctica 001'
+folder_name: 'Trve Kvlt 001'
 area_folder_names:
 #   - 'Outsiders 001'
 # default_dpi: 300
 # default_dpi: 200
 default_dpi: 150
 # default_dpi: 96
-WLB_ext_px: 8,15,18
+WLB_ext_px: 8,20,15
 # WLB_ext_px: 12,28,30
 lettering:
 #   global_font_size: 20
@@ -35,13 +35,13 @@ lettering:
 browser: 'Google Chrome'
 thumb_size: 240
 window_size: 1200,800
-WBLDN_padding: 40,50,50,50,50
+WBLDN_padding: 40,50,30,30,30
 # WBLDN_padding: 30,50,90,90,90
 # WBLDN_padding: 90,90,90,90,90
 # WBLDN_padding: 30,120,120,120,120
 font_size_range_dic:
-  default: '25~60'
-  'ffffff-000000': '25~60'
+  default: '30~30'
+  'ffffff-000000': '30~30'
 font_size_rarange: '0.65~1.25'
 bold_thres_dic:
   default: 1.5
@@ -105,7 +105,7 @@ bubble_condition:
   area_range: '100~1000000'
   perimeter_range: '10~40000'
   thickness_range: '4~4000'
-  br_w_range: '30~6000'
+  br_w_range: '20~6000'
   br_h_range: '30~6000'
   br_wh_range: '20~6000'
   br_wnh_range: '40~6000'
@@ -126,23 +126,23 @@ bubble_condition:
   bubble_px_rarange: '0.3~1.1'
   letter_px_rarange: '0.0008~0.9'
   BnL_px_rarange: '0.5~1.1'
-  mask_px_rarange: '0.05~1'
+  mask_px_rarange: '0.08~0.8'
   edge_px_count_range: '0~15'
   letter_area_range: '1~9000'
   textblock_area_range: '200~3000000'
   textblock_wrange: '20~1920'
-  textblock_hrange: '10~1000'
-  textblock_w_percent_range: '0~1'
-#  textblock_w_percent_range: '0.3~1'
-  textblock_h_percent_range: '0~1'
-#   textblock_h_percent_range: '0.5~1'
-  letter_cnts_range: '1~900'
+  textblock_hrange: '20~1000'
+#   textblock_w_percent_range: '0~1'
+  textblock_w_percent_range: '0.6~1'
+#   textblock_h_percent_range: '0~1'
+  textblock_h_percent_range: '0.6~1'
+  letter_cnts_range: '1~1000'
   textblock_letters_range: '1~1000'
   note_area_range: '10~6000'
   max_note_dist: 5
   intersect_ratio: 0.8
   seg_line_range: '50~500'
-  angle_px_step: 2,10
+  angle_px_step: 2,16
   WBN_tolerance: 10,30,15
 #   WBN_tolerance: 60,60,60
   textline_hrange: '6~40'
@@ -167,6 +167,8 @@ bubble_recognize:
   WLB_alpha: 30,50,30
   padding: 10
   r_dot: 5
+#   sum_sect_max: 5
+  sum_sect_max: 9999
 bubble_seg:
   use_rec: true
 #   use_rec: false
@@ -213,6 +215,8 @@ ocr_settings:
   has_decoration: false
   force_renew: true
 #   force_renew: false
+#   use_sd: true
+  use_sd: false
 youdao:
   app_id:
   app_key:
@@ -253,7 +257,7 @@ color_patterns:
 #  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
 color_pattern_dic:
   Comic:
-    - 'ffffff-15~000000-60' # 白底黑字
+    - 'ffffff-15~000000-45' # 白底黑字
 #     - '000000-15~ffffff-60' # 黑底白字
 #     - 'ffffff-60' # 白字
 #     - '000000-60' # 黑字
