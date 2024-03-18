@@ -1,6 +1,6 @@
-img_ind: 31
+img_ind: 38
 #step_str: '012345678'
-step_str: '1'
+step_str: '0'
 # thread_method: 'queue'
 thread_method: 'concurrent'
 # pic_thread_method: 'queue'
@@ -10,15 +10,16 @@ do_mode: 'do_qt'
 # do_mode: 'do_dev_pic'
 docx_img_format: 'jpeg'
 #docx_img_format: 'png'
-folder_name: 'Trve Kvlt 001'
+folder_name: 'Afterlift 002'
 area_folder_names:
-#   - 'Outsiders 001'
+#   - 'Afterlift 001'
 # default_dpi: 300
 # default_dpi: 200
 default_dpi: 150
 # default_dpi: 96
-WLB_ext_px: 8,20,15
-# WLB_ext_px: 12,28,30
+WLB_ext_px_dic:
+  Comic: 4,15,18
+  Manhua: 12,50,25
 lettering:
 #   global_font_size: 20
 #   global_font_size: 28
@@ -38,18 +39,16 @@ window_size: 1200,800
 WBLDN_padding: 40,50,30,30,30
 # WBLDN_padding: 30,50,90,90,90
 # WBLDN_padding: 90,90,90,90,90
-# WBLDN_padding: 30,120,120,120,120
+# WBLDN_padding: 60,120,120,120,120
 font_size_range_dic:
   default: '30~30'
   'ffffff-000000': '30~30'
 font_size_rarange: '0.65~1.25'
 bold_thres_dic:
-  default: 1.5
+  default: 1.15
 #   'ffffff-000000': 1.2
 #   '3948a5-ffffff': 1.5
 stem_level: 3
-media_lang: 'English'
-target_lang: 'zh-CN'
 font_dic:
   微软雅黑: 'msyh.ttc'
   方正兰亭黑: '方正兰亭黑_GBK.ttf'
@@ -68,6 +67,7 @@ chatgpt:
 long_pic:
 #  single_width_min: 1900
   single_width_min: 2000
+#   single_width_min: 3200
   group_len: 4
 #  group_len: 6
 frame_settings:
@@ -87,8 +87,10 @@ frame_settings:
   # 是否根据漫画画格添加边线
   do_add_frame: true
 #  do_add_frame: false
+  frame_level: 3
   frame_thres: 0.9995
   min_width: 60
+  min_outline_len: 40
   gaps: [15, 6, 8, 8]
 #  gaps: 0
   # 是否检查由多种颜色构成漫画画格框架
@@ -102,47 +104,50 @@ frame_settings:
   fully_framed: true
 #  fully_framed: false
 bubble_condition:
-  area_range: '100~1000000'
-  perimeter_range: '10~40000'
-  thickness_range: '4~4000'
-  br_w_range: '20~6000'
+  area_range: '80~1000000'
+  perimeter_range: '8~40000'
+  thickness_range: '3~4000'
+  br_w_range: '120~6000'
   br_h_range: '30~6000'
   br_wh_range: '20~6000'
   br_wnh_range: '40~6000'
-  br_w_rarange: '0.005~0.95'
-  br_h_rarange: '0.005~0.95'
+  br_w_rarange: '0.003~1'
+  br_h_rarange: '0.003~1'
   br_rarange: '0.02~1.1'
+#   br_rarange: '0.9~1.1' #矩形
 #  br_rarange: '0.02~0.9' #非矩形
-#  br_rarange: '0.9~1.1' #矩形
-  br_w_percent_range: '0~1'
-#  br_w_percent_range: '0.05~0.4'
-  br_h_percent_range: '0~1'
-#   br_h_percent_range: '0.5~1'
+  br_w_prange: '0~1'
+#  br_w_prange: '0.4~1'
+  br_h_prange: '0~1'
+#   br_h_prange: '0~0.5'
   portion_rarange: '0.00002~0.5'
   area_perimeter_rarange: '0.0005~0.1'
-  bubble_px_range: '100~1000000'
+  bubble_px_range: '80~1000000'
   letter_px_range: '3~1000000'
-#   letter_px_range: '3~1000000'
-  bubble_px_rarange: '0.3~1.1'
-  letter_px_rarange: '0.0008~0.9'
+  bubble_px_rarange: '0.3~0.99'
+  letter_px_rarange: '0.008~0.7'
   BnL_px_rarange: '0.5~1.1'
-  mask_px_rarange: '0.08~0.8'
+  CTD_mask_px_rarange: '0.008~0.8'
+#   CTD_thres: 127
+  CTD_thres: 30
   edge_px_count_range: '0~15'
   letter_area_range: '1~9000'
-  textblock_area_range: '200~3000000'
-  textblock_wrange: '20~1920'
+#   textblock_area_range: '200~3000000'
+  textblock_area_range: '3~3000000'
+  textblock_wrange: '20~1988'
   textblock_hrange: '20~1000'
-  textblock_w_percent_range: '0~1'
-#   textblock_w_percent_range: '0.6~1'
-  textblock_h_percent_range: '0~1'
-#   textblock_h_percent_range: '0.6~1'
+  textblock_w_prange: '0~1'
+#   textblock_w_prange: '0.7~1'
+  textblock_h_prange: '0~1'
+#   textblock_h_prange: '0.7~1'
   letter_cnts_range: '1~1000'
-  textblock_letters_range: '1~1000'
+  textblock_letters_range: '1~15000'
   note_area_range: '10~6000'
   max_note_dist: 5
-  intersect_ratio: 0.8
+#   intersect_ratio: 0.8
+  intersect_ratio: 0.1
   seg_line_range: '50~500'
-  angle_px_step: 2,16
+  angle_px_step: 2,15
   WBN_tolerance: 10,30,15
 #   WBN_tolerance: 60,60,60
   textline_hrange: '6~40'
@@ -150,6 +155,8 @@ bubble_condition:
   line_edge_range: '1~20'
   dot_line_h: 5
   dot_h: 4
+  bulk_thres: 0
+  overlap_ratio: 0.15
 char_condition:
   px_area_range: '5~30000'
   cnt_area_range: '10~30000'
@@ -167,6 +174,10 @@ bubble_recognize:
   WLB_alpha: 30,50,30
   padding: 10
   r_dot: 5
+#   rec_pad: 2
+#   rec_pad: 5
+  rec_pad: 10
+#   rec_pad: 20
 #   sum_sect_max: 5
   sum_sect_max: 9999
 bubble_seg:
@@ -181,17 +192,24 @@ bubble_seg:
 #  check_dots: true
   check_dots: false
   check_intact: true
-#  check_intact: false
+#   check_intact: false
   use_pivot_split: true
 #   use_pivot_split: false
+#   sort_by_y: true
+  sort_by_y: false
 ocr_settings:
   discard_ratio: 0.08
 #  y_thres: 8
   y_thres: 3
-  bit_thres: 127
   min_char_area: 3
   min_cnt_area: 9
+  bit_thres: 127
   white_thres: 200
+#   white_thres: 250
+  bi_thres: 127
+#   bi_thres: 200
+  ext_padding: 15
+#   ext_padding: 90
   base_num: 5
 #   base_num: 4
 #  cal_method: 加权最小二乘法
@@ -213,9 +231,20 @@ ocr_settings:
 #  do_cap: false
 #   has_decoration: true
   has_decoration: false
-  force_renew: true
-#   force_renew: false
-#   use_sd: true
+  renew_stitch: true
+#   renew_stitch: false
+#   renew_CTD: true
+  renew_CTD: false
+#   CTD_cut: whole
+#   CTD_cut: square
+  CTD_cut: tile
+  exclude_smaller: true
+#   exclude_smaller: false
+  exclude_inside: true
+#   exclude_inside: false
+#   ellipsis_type: '...'
+  ellipsis_type: '…'
+  #   use_sd: true
   use_sd: false
 youdao:
   app_id:
@@ -238,12 +267,17 @@ custom_ocr_engines:
 #  - 'BaiduAccu'
   - 'Paddle'
   - 'Easy'
-prompt_prefix: '你是一名职业翻译，现在你的任务是翻译漫画，请把下列html翻译成中文，保留原格式，并以html格式输出。人名和专有名词也要翻译成中文。'
+prompt_prefix_dic:
+  Comic: '您是一位专业的漫画翻译家，精通中文和英文。您的任务是翻译英文漫画，请把下列html翻译成中文，保留原格式，并以html格式输出。在翻译过程中，请仔细分析文本的上下文和情感色彩，确保翻译准确无误。人名和专有名词也要翻译成中文。翻译时要连贯、自然且符合中文表达习惯。翻译后的段落数量需和原文段落数量一致且一一对应，不能多段变成一段。'
+  Manhua: '您是一位专业的漫画翻译家，精通中文和英文。您的任务是翻译中文漫画，请把下列html翻译成英文，保留原格式，并以html格式输出。在翻译过程中，请仔细分析文本的上下文和情感色彩，确保翻译准确无误。'
 grid_ratio_dic:
-  Manga: 0.90 # 日漫黑白
   Comic: 0.90 # 美漫彩色
+  Manhua: 0.90
+  Manga: 0.90 # 日漫黑白
 italic_color_locates:
+#   - 'ffd266-ffface-000000'
 #   - 'fbab3c-fff3e5-000000'
+#   - 'e5f2c7-f1f5e4-000000'
 #   - 'ccecc3-36b449'
 #   - 'fdfdbd-000000'
 #   - '0d0d0d-ffffff'
@@ -257,9 +291,11 @@ color_patterns:
 #  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
 color_pattern_dic:
   Comic:
-    - 'ffffff-15~000000-45' # 白底黑字
+    - 'ffffff-10~000000-60' # 白底黑字
 #     - '000000-15~ffffff-60' # 黑底白字
-#     - 'ffffff-60' # 白字
+#     - 'ffffff-10' # 白字
 #     - '000000-60' # 黑字
   Manga:
-#    - 'ffffff-15~000000-60' # 白底黑字
+#     - 'ffffff-15~000000-60' # 白底黑字
+  Manhua:
+#     - 'ffffff-15~000000-60' # 白底黑字
