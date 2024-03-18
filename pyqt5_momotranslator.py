@@ -1696,6 +1696,8 @@ def get_white_lines(binary_mask, method, media_type):
 
     # ================最小厚度检验================
     white_lines_normal = [x for x in white_lines if x[1] > min_frame_length]
+
+    logger.debug(f'{white_lines_normal=}')
     return white_lines_normal
 
 
@@ -2234,8 +2236,10 @@ def get_textblock_bubbles(img_raw, all_textblocks):
         contour_points = [tuple(point[0]) for point in textblock.block_contour]
         if len(textlines) > 0:
             mask = drawContours(black_bg.copy(), [array(contour_points)], -1, 255, FILLED)
-            mask_d5 = dilate(mask, kernel5, iterations=1)
-            contours, _ = findContours(mask_d5, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+            custom_kernel = kernel5
+            # custom_kernel = kernel1
+            mask_dc = dilate(mask, custom_kernel, iterations=1)
+            contours, _ = findContours(mask_dc, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
             contour = contours[0]
             points = [tuple(point[0]) for point in contour]
             draw.polygon(points, fill=textblock_rgba)
@@ -2430,7 +2434,7 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
                 condition_b4,
                 condition_b5,
                 condition_b6,
-                # condition_b7,
+                condition_b7,
                 # condition_b8,
                 condition_b9,
                 condition_b10,
@@ -2441,6 +2445,8 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             if all(condition_bs):
                 good_inds.append(a)
                 # logger.warning(f'{a=}')
+                logger.debug(f'{bubble_px_ratio=}')
+                logger.debug(f'{letter_px_ratio=}')
                 logger.warning(f'{border_thickness=}')
 
     filter_inds = get_filter_inds(good_inds, hierarchy)
@@ -2716,15 +2722,19 @@ class Contr:
     def __init__(self, contour):
         self.type = self.__class__.__name__
         self.contour = contour
+        # 如果轮廓点集的长度大于等于3，可以构成多边形
         if len(contour) >= 3:
             self.polygon = Polygon(np.vstack((contour[:, 0, :], contour[0, 0, :])))
             if not self.polygon.is_valid:
                 self.polygon = self.polygon.buffer(0)
         else:
+            # 如果点集不足以构成多边形，则设置为None
             self.polygon = None
 
+        # 计算轮廓的面积和周长
         self.area = contourArea(self.contour)
         self.perimeter = arcLength(self.contour, True)
+        # 根据周长和面积计算厚度和面积周长比
         if self.perimeter != 0:
             self.thickness = self.area / self.perimeter
             self.area_perimeter_ratio = self.area / self.perimeter / self.perimeter
@@ -2732,6 +2742,7 @@ class Contr:
             self.thickness = 0
             self.area_perimeter_ratio = 0
 
+        # 轮廓的外接矩形
         self.br = boundingRect(self.contour)
         self.br_x, self.br_y, self.br_w, self.br_h = self.br
         self.br_u = self.br_x + self.br_w
@@ -2740,14 +2751,16 @@ class Contr:
         self.br_n = int(self.br_y + 0.5 * self.br_h)
         self.br_area = self.br_w * self.br_h
         self.br_rt = self.area / self.br_area
+        # 将外接矩形转换为多边形点集
         self.br_pts = rect2poly(*self.br)
         self.brp = Polygon(self.br_pts)
         self.br_xy = (self.br_x, self.br_y)
         self.br_uv = (self.br_u, self.br_v)
+        # 轮廓的平均宽度和高度
         self.avg_w = self.area / self.br_h
         self.avg_h = self.area / self.br_w
+        # 计算轮廓的质心坐标
         self.M = moments(self.contour)
-        # 这两行是计算质点坐标
         if self.M['m00'] != 0:
             self.cx = int(self.M['m10'] / self.M['m00'])
             self.cy = int(self.M['m01'] / self.M['m00'])
@@ -2758,6 +2771,10 @@ class Contr:
         self.cxy_pt = Point(self.cxy)
         self.cxy_str = f'{self.cx},{self.cy}'
         self.cyx_str = f'{self.cy},{self.cx}'
+        self.cxv = (self.cx, self.br_v - 3)
+        self.order_pt = self.cxy
+        # self.order_pt = self.cxv
+
         self.strokes = []
 
     def add_stroke(self, stroke):
@@ -4710,9 +4727,10 @@ class MistWindow(QMainWindow):
             if mask_pics:
                 single_cnts = get_single_cnts(img_raw, mask_pics)
                 logger.debug(f'{len(single_cnts)=}')
-                single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
-                ordered_cnts = list(chain(*single_cnts_grids))
-                order_preview = get_order_preview(marked_frames, single_cnts_grids)
+                single_cnts_grids_ordered = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs,
+                                                             media_type)
+                ordered_cnts = list(chain(*single_cnts_grids_ordered))
+                order_preview = get_order_preview(marked_frames, single_cnts_grids_ordered)
                 write_pic(order_preview_jpg, order_preview)
                 self.cgs.load_qimg(order_preview, order_preview_jpg)
 
@@ -4953,7 +4971,7 @@ def compute_frame_mask(img_raw, dominant_colors, tolerance):
     # 将多个掩码相加
     combined_mask = np.sum(masks, axis=0)
     # 将 combined_mask 转换为 uint8 类型
-    combined_mask_uint8 = combined_mask.astype(np.uint8)
+    combined_mask_uint8 = combined_mask.astype(uint8)
     bubble_mask = combined_mask_uint8
     letter_mask = bitwise_not(bubble_mask)
     filter_cnts = get_raw_bubbles(bubble_mask, letter_mask, None, None, None)
@@ -5242,9 +5260,11 @@ def get_textblocks(letter_in_contour, media_type, f=None):
     # letter_in_contour_inv = bitwise_not(letter_in_contour)
     if do_dev_pic:
         if f is not None:
-            letter_in_contour_png = current_dir / f'letter_in_contour_{f}.png'
+            letter_in_contour_name = f'letter_in_contour_{f}.png'
         else:
-            letter_in_contour_png = current_dir / f'letter_in_contour.png'
+            letter_in_contour_name = 'letter_in_contour.png'
+        letter_in_contour_png = current_dir / letter_in_contour_name
+        logger.debug(f'{letter_in_contour_name=}')
         write_pic(letter_in_contour_png, letter_in_contour)
 
     # ================单字轮廓================
@@ -5475,8 +5495,9 @@ def get_textblocks(letter_in_contour, media_type, f=None):
         textblocks = [x for x in textblocks if textblock_hmin <= x.block_cnt.br_h <= textblock_hmax]
         logger.debug(f'{len(textblocks)=}')
     # ================其他排序================
-    # if len(textblocks) == 3:
-    #     textblocks.sort(key=lambda x: x.br_y)
+    if sort_by_y:
+        if len(textblocks) in [3, 4]:
+            textblocks.sort(key=lambda x: x.br_y)
     return textblocks
 
 
@@ -5700,6 +5721,9 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, f):
             logger.error(f'{coords_list=}')
             # 生成示意图
             error_preview = preview_canvas.copy()
+            # 在示意图上标记分割线的中心点
+            error_preview = circle(error_preview, pt2tup(pt_center), 3, color_yellow, -1)
+            error_preview = circle(error_preview, pt2tup(cur_pt_center), 3, color_blue, -1)
             # 保存示意图
             error_preview_png = current_dir / 'error_preview.png'
             write_pic(error_preview_png, error_preview)
@@ -5802,6 +5826,7 @@ def seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type):
 
             # 先检查数量一致性
             seg_success = (len(seg_cnts) == len(textblocks))
+            logger.debug(f'{seg_success=}')
             # 再检查分割是否不破坏文本
             if seg_success and check_intact:
                 for cnt in seg_cnts:
@@ -5920,7 +5945,7 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
         # ================切割相连气泡================
         single_cnts, all_textblocks = seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type)
         # ================通过画格重新排序气泡框架================
-        single_cnts_grids = []
+        single_cnts_grids_ordered = []
         for f in range(len(frame_grid_strs)):
             frame_grid_str = frame_grid_strs[f]
             # 使用正则表达式提取字符串中的所有整数
@@ -5954,8 +5979,8 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
             else:
                 ax = 1
             single_cnts_grid.sort(key=lambda x: ax * x.cx + x.cy)
-            single_cnts_grids.append(single_cnts_grid)
-        ordered_cnts = list(chain(*single_cnts_grids))
+            single_cnts_grids_ordered.append(single_cnts_grid)
+        ordered_cnts = list(chain(*single_cnts_grids_ordered))
 
     if do_dev_pic:
         letter_mask_png = current_dir / 'letter_mask.png'
@@ -6358,10 +6383,11 @@ def get_grid_masks(img_file, frame_grid_strs):
     black_bg = zeros((ih, iw), uint8)
     logger.warning(f'{frame_grid_strs=}')
 
+    # ================获取画格内外方框================
     panels = get_start_panels(frame_grid_strs)
     # ================读取psd画格================
     panel_layers = get_panel_layers(pic_div_psd)
-    # ================按数字序数排序================
+    # ================图层按数字序数排序================
     panel_layers.sort(key=lambda x: int(x.name.removeprefix('图层').strip()))
     # ================以正确顺序插入到panels================
     for p in range(len(panel_layers)):
@@ -6381,6 +6407,7 @@ def get_grid_masks(img_file, frame_grid_strs):
         color_bgra = color_rgb[::-1] + (255,)
 
         if isinstance(panel, tuple):
+            # ================内外方框================
             outer_br, inner_br = panel
             # logger.warning(f'{inner_br=}')
             x, y, w, h = outer_br
@@ -6399,6 +6426,7 @@ def get_grid_masks(img_file, frame_grid_strs):
             filled_frame_inner = rectangle(black_bg.copy(), pt3, pt4, 255, -1)
             grid_masks.append(filled_frame_outer)
         else:
+            # ================psd图层================
             layer = panel
             layer_index = int(layer.name.removeprefix('图层').strip())
 
@@ -6742,26 +6770,6 @@ def find_intervals(projection, threshold):
     return intervals
 
 
-def get_grouped_bulks(single_cnts_grid, thres=0):
-    # 将在Y轴方向上有重叠的部分划分到一起
-    grouped_bulks = []
-    current_group = [single_cnts_grid[0]]
-    for i in range(1, len(single_cnts_grid)):
-        curr_cnt = single_cnts_grid[i]
-        group_bottom = max([cnt.br_v for cnt in current_group])
-        group_top = min([cnt.br_y for cnt in current_group])
-        # 如果当前cnt的顶部在组内任何一个cnt的底部之上（考虑阈值）并且
-        # 当前cnt的底部在组内任何一个cnt的顶部之下（考虑阈值）
-        if curr_cnt.br_y <= group_bottom + thres and curr_cnt.br_v >= group_top - thres:
-            current_group.append(curr_cnt)
-        else:
-            grouped_bulks.append(current_group)
-            current_group = [curr_cnt]
-    if current_group:
-        grouped_bulks.append(current_group)
-    return grouped_bulks
-
-
 # @logger.catch
 def sort_bubble(cnt, ax, origin_x, origin_y):
     val = ax * (cnt.cx - origin_x) + (cnt.cy - origin_y)
@@ -6773,16 +6781,6 @@ def sort_bubble(cnt, ax, origin_x, origin_y):
         elif cnt.core_br_y - origin_y <= 600:
             val = 0.5 * ax * (cnt.cx - origin_x) + (cnt.cy - origin_y)
     return val
-
-
-def get_new_grids(single_cnts_grids):
-    cxys = set()
-    new_grids = []
-    for single_cnts_grid in single_cnts_grids:
-        new_grid = [single_cnt for single_cnt in single_cnts_grid if single_cnt.cxy not in cxys]
-        cxys.update(single_cnt.cxy for single_cnt in new_grid)
-        new_grids.append(new_grid)
-    return new_grids
 
 
 # @logger.catch
@@ -6799,11 +6797,13 @@ def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media
     all_contours = [single_cnt.contour for single_cnt in single_cnts]
     white_bubbles = drawContours(black_bg.copy(), all_contours, -1, 255, FILLED)
     # ================通过画格重新排序气泡框架================
+    single_cnts_grids_ordered = []
     single_cnts_grids = []
     for g in range(len(grid_masks)):
         grid_mask = grid_masks[g]
         grid_mask_px_pts = transpose(nonzero(grid_mask))
         grid_mask_px_area = grid_mask_px_pts.shape[0]
+        # ================获取外接矩形坐标作为参考================
         all_x = grid_mask_px_pts[:, 1]
         all_y = grid_mask_px_pts[:, 0]
         all_x.sort()
@@ -6812,80 +6812,146 @@ def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media
         grid_y = min(all_y)
         grid_w = max(all_x) - min(all_x)
         grid_h = max(all_y) - min(all_y)
+        logger.debug(f'[画格{g + 1}]外接矩形({grid_x}, {grid_y}, {grid_w}, {grid_h})')
         grid_white_bubbles = bitwise_and(white_bubbles, grid_mask)
         grid_white_bubbles_px_pts = transpose(nonzero(grid_white_bubbles))
         grid_white_bubbles_px_area = grid_white_bubbles_px_pts.shape[0]
-        # ================如果画格内有气泡================
-        if grid_white_bubbles_px_area >= 300:
-            single_cnts_grid = []
+        single_cnts_grid = []
+        # ================如果画格和气泡有重叠区域================
+        if grid_white_bubbles_px_area >= 100:
             # ================获取当前画格内所有气泡轮廓================
             for s in range(len(single_cnts)):
                 single_cnt = single_cnts[s]
                 if grid_mask[single_cnt.cy, single_cnt.cx] == 255:
+                    # ================如果轮廓质心在此画格内部================
                     single_cnts_grid.append(single_cnt)
-            # ================当前画格有可能没有气泡但包含其他画格的气泡的一部分================
-            bulk_cnts_grid = []
-            if single_cnts_grid:
-                single_cnts_grid = sorted(single_cnts_grid, key=lambda x: x.br_y)
-                # ================获取高度块================
-                grouped_bulks = get_grouped_bulks(single_cnts_grid)
-                # ================如果grid_mask又宽又矮================
-                if (grid_mask_px_area <= 0.25 * ih * iw and grid_w >= 0.5 * iw) or fully_framed:
-                    # ================所有高度块强制设置为同一组================
-                    grouped_bulks = [list(chain(*grouped_bulks))]
-                bulk_cnts_group = []
-                for g in range(len(grouped_bulks)):
-                    grouped_bulk = grouped_bulks[g]
-                    y_min = min([cnt.br_y for cnt in grouped_bulk])
-                    y_max = max([cnt.br_v for cnt in grouped_bulk])
-                    # ================获取团块================
-                    mask_y = zeros_like(grid_white_bubbles)
-                    mask_y[y_min:y_max, :] = 255
-                    masked_grid_white_part = bitwise_and(grid_white_bubbles, mask_y)
-                    masked_grid_mask = bitwise_and(grid_mask, mask_y)
-                    dilated_masked = dilate(masked_grid_white_part.copy(), kernel60, iterations=1)
-                    dilated_masked = bitwise_and(dilated_masked, masked_grid_mask)
-                    bulk_contours, _ = findContours(dilated_masked, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-                    bulk_cnts = []
-                    for b in range(len(bulk_contours)):
-                        bulk_contour = bulk_contours[b]
-                        bulk_cnt = Contr(bulk_contour)
-                        if bulk_cnt.area >= 300:
-                            bulk_cnt.get_core_br(black_bg)
-                            bulk_cnts.append(bulk_cnt)
-                    all_br_x = [cnt.core_br_x for cnt in bulk_cnts]
-                    all_br_y = [cnt.core_br_y for cnt in bulk_cnts]
+        single_cnts_grids.append(single_cnts_grid)
+
+    # ================边界外的轮廓================
+    catered_cnts = list(chain(*single_cnts_grids))
+    uncatered_cnts = [x for x in single_cnts if x not in catered_cnts]
+    for u in range(len(uncatered_cnts)):
+        uncatered_cnt = uncatered_cnts[u]
+        logger.info(f'未分类轮廓{uncatered_cnt.cxy=}')
+        for g in range(len(grid_masks)):
+            grid_mask = grid_masks[g]
+            if grid_mask[uncatered_cnt.br_v, uncatered_cnt.cx] == 255:
+                logger.info(f'{g=}')
+                # ================如果轮廓质心在此画格内部================
+                single_cnts_grids[g].append(uncatered_cnt)
+                break
+
+    for g in range(len(grid_masks)):
+        grid_mask = grid_masks[g]
+        grid_mask_px_pts = transpose(nonzero(grid_mask))
+        grid_mask_px_area = grid_mask_px_pts.shape[0]
+        # ================获取外接矩形坐标作为参考================
+        all_x = grid_mask_px_pts[:, 1]
+        all_y = grid_mask_px_pts[:, 0]
+        all_x.sort()
+        all_y.sort()
+        grid_x = min(all_x)
+        grid_y = min(all_y)
+        grid_w = max(all_x) - min(all_x)
+        grid_h = max(all_y) - min(all_y)
+        logger.info(f'[{g + 1}]({grid_x}, {grid_y}, {grid_w}, {grid_h})')
+        grid_white_bubbles = bitwise_and(white_bubbles, grid_mask)
+        grid_white_bubbles_px_pts = transpose(nonzero(grid_white_bubbles))
+        grid_white_bubbles_px_area = grid_white_bubbles_px_pts.shape[0]
+
+        single_cnts_grid = single_cnts_grids[g]
+        logger.debug(f'[画格{g + 1}]{len(single_cnts_grid)=}')
+        # ================根据高度块重排序================
+        bulk_cnts_grid = []
+        if single_cnts_grid:
+            single_cnts_grid = sorted(single_cnts_grid, key=lambda x: x.br_y)
+            # ================获取高度块================
+            # 将在Y轴方向上有重叠的部分划分到一起
+            grouped_bulks = []
+            current_group = [single_cnts_grid[0]]
+            for s in range(1, len(single_cnts_grid)):
+                curr_cnt = single_cnts_grid[s]
+                group_bottom = max([cnt.br_v for cnt in current_group])
+                group_top = min([cnt.br_y for cnt in current_group])
+                # 如果当前cnt的顶部在组内任何一个cnt的底部之上（考虑阈值）并且
+                # 当前cnt的底部在组内任何一个cnt的顶部之下（考虑阈值）
+                if curr_cnt.br_y <= group_bottom + bulk_thres and curr_cnt.br_v >= group_top - bulk_thres:
+                    current_group.append(curr_cnt)
+                else:
+                    grouped_bulks.append(current_group)
+                    current_group = [curr_cnt]
+            if current_group:
+                grouped_bulks.append(current_group)
+            # ================如果grid_mask又宽又矮================
+            if (grid_mask_px_area <= 0.25 * ih * iw and grid_w >= 0.5 * iw) or fully_framed:
+                # ================所有高度块强制设置为同一组================
+                grouped_bulks = [list(chain(*grouped_bulks))]
+
+            # ================对已按高度分组的轮廓继续进行分析================
+            bulk_cnts_group = []
+            for b in range(len(grouped_bulks)):
+                grouped_bulk = grouped_bulks[b]
+                logger.debug(f'[高度块{b + 1}]{len(grouped_bulk)=}')
+                y_min = min([cnt.br_y for cnt in grouped_bulk])
+                y_max = max([cnt.br_v for cnt in grouped_bulk])
+                # ================获取团块================
+                mask_y = black_bg.copy()
+                mask_y[y_min:y_max, :] = 255
+                masked_grid_white_part = bitwise_and(grid_white_bubbles, mask_y)
+                masked_grid_mask = bitwise_and(grid_mask, mask_y)
+                dilated_masked = dilate(masked_grid_white_part.copy(), kernel60, iterations=1)
+                dilated_masked = bitwise_and(dilated_masked, masked_grid_mask)
+                bulk_contours, _ = findContours(dilated_masked, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+                bulk_cnts = []
+                for b in range(len(bulk_contours)):
+                    bulk_contour = bulk_contours[b]
+                    bulk_cnt = Contr(bulk_contour)
+                    if bulk_cnt.area >= 30:
+                        bulk_cnt.get_core_br(black_bg)
+                        bulk_cnts.append(bulk_cnt)
+                all_br_x = [cnt.core_br_x for cnt in bulk_cnts]
+                all_br_y = [cnt.core_br_y for cnt in bulk_cnts]
+                origin_x, origin_y = min(all_br_x), min(all_br_y)
+                bulk_cnts.sort(key=lambda x: ax * (x.cx - origin_x) + (x.cy - origin_y))
+                bulk_cnts_group.append(bulk_cnts)
+            bulk_cnts_grid = list(chain(*bulk_cnts_group))
+        if bulk_cnts_grid:
+            logger.debug(f'{len(bulk_cnts_grid)=}')
+            cnts_in_bulk_grid = []
+            for b in range(len(bulk_cnts_grid)):
+                bulk_cnt = bulk_cnts_grid[b]
+                # ================质心在团块轮廓中的气泡轮廓================
+                cnts_in_bulk = [x for x in single_cnts if pointPolygonTest(bulk_cnt.contour, x.order_pt, False) > 0]
+                if cnts_in_bulk:
+                    # ================获取整体的外接矩形左上角坐标================
+                    for c in range(len(cnts_in_bulk)):
+                        cnt = cnts_in_bulk[c]
+                        cnt.get_core_br(black_bg)
+                    all_br_x = [cnt.core_br_x for cnt in cnts_in_bulk]
+                    all_br_y = [cnt.core_br_y for cnt in cnts_in_bulk]
                     origin_x, origin_y = min(all_br_x), min(all_br_y)
-                    bulk_cnts.sort(key=lambda x: ax * (x.cx - origin_x) + (x.cy - origin_y))
-                    bulk_cnts_group.append(bulk_cnts)
-                bulk_cnts_grid = list(chain(*bulk_cnts_group))
-            if bulk_cnts_grid:
-                cnts_in_bulk_grid = []
-                for b in range(len(bulk_cnts_grid)):
-                    bulk_cnt = bulk_cnts_grid[b]
-                    cnts_in_bulk = [x for x in single_cnts if
-                                    pointPolygonTest(bulk_cnt.contour, (x.cx, x.cy), False) > 0]
-                    if cnts_in_bulk:
-                        # ================获取整体的外接矩形左上角坐标================
-                        for c in range(len(cnts_in_bulk)):
-                            cnt = cnts_in_bulk[c]
-                            cnt.get_core_br(black_bg)
-                        all_br_x = [cnt.core_br_x for cnt in cnts_in_bulk]
-                        all_br_y = [cnt.core_br_y for cnt in cnts_in_bulk]
-                        origin_x, origin_y = min(all_br_x), min(all_br_y)
-                        # ================画格内按坐标排序================
-                        cnts_in_bulk.sort(key=lambda cnt: sort_bubble(cnt, ax, origin_x, origin_y))
-                        cnts_in_bulk_grid.append(cnts_in_bulk)
-                single_cnts_grid_ordered = list(chain(*cnts_in_bulk_grid))
-                if bubble_order_strs:
-                    try:
-                        # 根据bubble_order_strs中的cxy_str顺序对single_cnts_grid_ordered进行排序
-                        single_cnts_grid_ordered.sort(key=lambda cnt: bubble_order_strs.index(cnt.cxy_str))
-                    except ValueError as e:
-                        logger.error(f'{img_file=}')
-                single_cnts_grids.append(single_cnts_grid_ordered)
-    single_cnts_grids = get_new_grids(single_cnts_grids)
-    return single_cnts_grids
+                    # ================画格内按坐标排序================
+                    cnts_in_bulk.sort(key=lambda cnt: sort_bubble(cnt, ax, origin_x, origin_y))
+                    cnts_in_bulk_grid.append(cnts_in_bulk)
+            single_cnts_grid_ordered = list(chain(*cnts_in_bulk_grid))
+            # ================使用手动排序得到的记录排序================
+            if bubble_order_strs:
+                try:
+                    # 根据bubble_order_strs中的cxy_str顺序对single_cnts_grid_ordered进行排序
+                    single_cnts_grid_ordered.sort(key=lambda cnt: bubble_order_strs.index(cnt.cxy_str))
+                except ValueError as e:
+                    logger.error(f'{img_file=}')
+            single_cnts_grids_ordered.append(single_cnts_grid_ordered)
+    # ================对排序后的轮廓去重================
+    cxys = set()
+    new_grids = []
+    for o in range(len(single_cnts_grids_ordered)):
+        single_cnts_grid = single_cnts_grids_ordered[o]
+        logger.debug(f'[画格{o + 1}]{len(single_cnts_grid)=}')
+        new_grid = [single_cnt for single_cnt in single_cnts_grid if single_cnt.cxy not in cxys]
+        cxys.update(single_cnt.cxy for single_cnt in new_grid)
+        new_grids.append(new_grid)
+    return new_grids
 
 
 @lru_cache
@@ -6948,9 +7014,9 @@ def order1pic(img_folder, i, media_type):
     if mask_pics:
         single_cnts = get_single_cnts(img_raw, mask_pics)
         logger.debug(f'{len(single_cnts)=}')
-        single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
-        ordered_cnts = list(chain(*single_cnts_grids))
-        order_preview = get_order_preview(marked_frames, single_cnts_grids)
+        single_cnts_grids_ordered = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
+        ordered_cnts = list(chain(*single_cnts_grids_ordered))
+        order_preview = get_order_preview(marked_frames, single_cnts_grids_ordered)
         write_pic(order_preview_jpg, order_preview)
         if sd_img_folder.exists() and not bubble_order_strs:
             if len(sd_bubble_order_strs) == len(ordered_cnts):
@@ -6991,8 +7057,8 @@ def order1pic(img_folder, i, media_type):
 
 
 @timer_decorator
-def get_order_preview(marked_frames, single_cnts_grids):
-    ordered_cnts = list(chain(*single_cnts_grids))
+def get_order_preview(marked_frames, single_cnts_grids_ordered):
+    ordered_cnts = list(chain(*single_cnts_grids_ordered))
     img_pil = fromarray(cvtColor(marked_frames, COLOR_BGR2RGB))
     # 创建与原图大小相同的透明图像
     bubble_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
@@ -7026,8 +7092,8 @@ def get_order_preview(marked_frames, single_cnts_grids):
         bubble_draw.text(xy_pos, text, font=msyh_font100, fill=trans_purple)
 
     # ================按照画格内对话框顺序添加红色连线================
-    for g in range(len(single_cnts_grids)):
-        single_cnts_grid = single_cnts_grids[g]
+    for g in range(len(single_cnts_grids_ordered)):
+        single_cnts_grid = single_cnts_grids_ordered[g]
         # 确定该画格内需要绘制的红线数量
         total_lines = len(single_cnts_grid) - 1
         if len(single_cnts_grid) >= 2:
@@ -7911,8 +7977,8 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
         single_cnts = get_single_cnts(img_raw, mask_pics)
         logger.debug(f'{len(single_cnts)=}')
 
-        single_cnts_grids = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
-        ordered_cnts = list(chain(*single_cnts_grids))
+        single_cnts_grids_ordered = get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media_type)
+        ordered_cnts = list(chain(*single_cnts_grids_ordered))
 
         for c in range(len(ordered_cnts)):
             single_cnt = ordered_cnts[c]
@@ -8666,7 +8732,7 @@ def draw_line_proj_cnts(img_np, line_proj_cnts):
         line_binary = line_binarys[t]
         line_binary_border = line_binary_borders[t]
         # 创建每一行文本的基准矩形掩模
-        line_belong_mask = zeros_like(img_bi, dtype=np.uint8)
+        line_belong_mask = zeros_like(img_bi, dtype=uint8)
         x, y, w, h = line_proj_cnt.line_br
         line_belong_mask[y:y + h, x:x + w] = 255
         # 将基准矩形掩模与mask_unbelong重叠的部分视为每一行的真正区域
@@ -9565,7 +9631,8 @@ def step5_chatgpt_translate(read_html, raw_html, target_lang):
         current_lines = split_lines[s]
         current_text = lf.join(current_lines)
         full_prompt = f'{prompt_prefix}{lf}```html{lf}{current_text}{lf}```'
-        if full_prompt not in target_divs:
+        possible_divs = [x for x in target_divs if full_prompt in x]
+        if not possible_divs:
             if do_automate:
                 logger.warning(f'{s=}, {len(current_lines)=}, {len(current_text)=}')
                 logger.info(full_prompt)
@@ -10294,8 +10361,8 @@ if __name__ == "__main__":
     br_w_rarange = bubble_condition['br_w_rarange']
     br_h_rarange = bubble_condition['br_h_rarange']
     br_rarange = bubble_condition['br_rarange']
-    br_w_percent_range = bubble_condition['br_w_percent_range']
-    br_h_percent_range = bubble_condition['br_h_percent_range']
+    br_w_prange = bubble_condition['br_w_prange']
+    br_h_prange = bubble_condition['br_h_prange']
     portion_rarange = bubble_condition['portion_rarange']
     area_perimeter_rarange = bubble_condition['area_perimeter_rarange']
     bubble_px_range = bubble_condition['bubble_px_range']
@@ -10309,8 +10376,8 @@ if __name__ == "__main__":
     textblock_area_range = bubble_condition['textblock_area_range']
     textblock_wrange = bubble_condition['textblock_wrange']
     textblock_hrange = bubble_condition['textblock_hrange']
-    textblock_w_percent_range = bubble_condition['textblock_w_percent_range']
-    textblock_h_percent_range = bubble_condition['textblock_h_percent_range']
+    textblock_w_prange = bubble_condition['textblock_w_prange']
+    textblock_h_prange = bubble_condition['textblock_h_prange']
     letter_cnts_range = bubble_condition['letter_cnts_range']
     textblock_letters_range = bubble_condition['textblock_letters_range']
     note_area_range = bubble_condition['note_area_range']
@@ -10336,6 +10403,7 @@ if __name__ == "__main__":
     line_edge_range = bubble_condition['line_edge_range']
     dot_line_h = bubble_condition['dot_line_h']
     dot_h = bubble_condition['dot_h']
+    bulk_thres = bubble_condition['bulk_thres']
 
     area_min, area_max = parse_range(area_range)
     perimeter_min, perimeter_max = parse_range(perimeter_range)
@@ -10347,8 +10415,8 @@ if __name__ == "__main__":
     br_w_ratio_min, br_w_ratio_max = parse_range(br_w_rarange)
     br_h_ratio_min, br_h_ratio_max = parse_range(br_h_rarange)
     br_ratio_min, br_ratio_max = parse_range(br_rarange)
-    br_w_percent_min, br_w_percent_max = parse_range(br_w_percent_range)
-    br_h_percent_min, br_h_percent_max = parse_range(br_h_percent_range)
+    br_w_percent_min, br_w_percent_max = parse_range(br_w_prange)
+    br_h_percent_min, br_h_percent_max = parse_range(br_h_prange)
     portion_ratio_min, portion_ratio_max = parse_range(portion_rarange)
     area_perimeter_ratio_min, area_perimeter_ratio_max = parse_range(area_perimeter_rarange)
     bubble_px_min, bubble_px_max = parse_range(bubble_px_range)
@@ -10362,8 +10430,8 @@ if __name__ == "__main__":
     textblock_area_min, textblock_area_max = parse_range(textblock_area_range)
     textblock_wmin, textblock_wmax = parse_range(textblock_wrange)
     textblock_hmin, textblock_hmax = parse_range(textblock_hrange)
-    textblock_w_percent_min, textblock_w_percent_max = parse_range(textblock_w_percent_range)
-    textblock_h_percent_min, textblock_h_percent_max = parse_range(textblock_h_percent_range)
+    textblock_w_percent_min, textblock_w_percent_max = parse_range(textblock_w_prange)
+    textblock_h_percent_min, textblock_h_percent_max = parse_range(textblock_h_prange)
     letter_cnts_min, letter_cnts_max = parse_range(letter_cnts_range)
     textblock_letters_min, textblock_letters_max = parse_range(textblock_letters_range)
     note_area_min, note_area_max = parse_range(note_area_range)
@@ -10410,6 +10478,7 @@ if __name__ == "__main__":
     check_dots = bubble_seg['check_dots']
     check_intact = bubble_seg['check_intact']
     use_pivot_split = bubble_seg['use_pivot_split']
+    sort_by_y = bubble_seg['sort_by_y']
 
     ocr_settings = app_config.config_data['ocr_settings']
     discard_ratio = ocr_settings['discard_ratio']
@@ -10521,8 +10590,12 @@ if __name__ == "__main__":
             en_reader = Reader(['en'])
             en_ocr = PaddleOCR(use_gpu=False, lang='en')
 
-    logger.warning(f'{do_mode=}, {thread_method=}, {pic_thread_method=}')
-    area_dic = get_area_dic(area_folder_names)
+    logger.warning(f'{do_mode=}, {thread_method=}, {pic_thread_method=}, {folder_name=}')
+    if '3' in step_str:
+        area_dic = get_area_dic(area_folder_names)
+    else:
+        area_dic = {}
+
     if do_qt:
         appgui = QApplication(sys.argv)
         translator = QTranslator()
