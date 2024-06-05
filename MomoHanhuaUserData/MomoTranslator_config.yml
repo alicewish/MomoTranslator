@@ -1,6 +1,5 @@
-img_ind: 38
-#step_str: '012345678'
-step_str: '0'
+img_ind: 1
+step_str: '1'
 # thread_method: 'queue'
 thread_method: 'concurrent'
 # pic_thread_method: 'queue'
@@ -8,6 +7,24 @@ pic_thread_method: 'concurrent'
 do_mode: 'do_qt'
 # do_mode: 'do_dev_folder'
 # do_mode: 'do_dev_pic'
+# hit_enter: true
+hit_enter: false
+use_pivot_split: true
+# use_pivot_split: false
+# bbox_type: 'block'
+# bbox_type: 'line'
+bbox_type: 'both'
+better_data: true
+# better_data: false
+lettering_type: 'normal'
+# lettering_type: '不朽'
+# lettering_type: '永恒'
+# lettering_type: 'SD'
+# lettering_type: 'HD'
+WLB_ext_px_dic:
+  Comic: 10,16,12
+#   Comic: 15,48,36
+  Manhua: 12,50,25
 docx_img_format: 'jpeg'
 #docx_img_format: 'png'
 folder_name: 'Afterlift 002'
@@ -17,12 +34,7 @@ area_folder_names:
 # default_dpi: 200
 default_dpi: 150
 # default_dpi: 96
-WLB_ext_px_dic:
-  Comic: 4,15,18
-  Manhua: 12,50,25
 lettering:
-#   global_font_size: 20
-#   global_font_size: 28
   global_font_size: 30
   global_font_name: '微软雅黑'
 #   global_font_name: '思源黑体'
@@ -31,56 +43,76 @@ lettering:
   global_rec_font_name:
   global_spacing:
 #   global_spacing: 8
-  check_len: 40
-#browser: 'Safari'
-browser: 'Google Chrome'
+  check_len: 42
+#   rec2italic: true
+  rec2italic: false
+# browser: 'Safari'
+# browser: 'Google Chrome'
+browser: 'Google Chrome Dev'
+# browser: 'Google Chrome Canary'
 thumb_size: 240
 window_size: 1200,800
 WBLDN_padding: 40,50,30,30,30
 # WBLDN_padding: 30,50,90,90,90
-# WBLDN_padding: 90,90,90,90,90
+# WBLDN_padding: 40,50,70,70,70
 # WBLDN_padding: 60,120,120,120,120
 font_size_range_dic:
   default: '30~30'
   'ffffff-000000': '30~30'
-font_size_rarange: '0.65~1.25'
+font_size_rarange: '0.65~1.05'
 bold_thres_dic:
-  default: 1.15
+  default: 1.25
 #   'ffffff-000000': 1.2
 #   '3948a5-ffffff': 1.5
 stem_level: 3
 font_dic:
   微软雅黑: 'msyh.ttc'
-  方正兰亭黑: '方正兰亭黑_GBK.ttf'
+  思源黑体: 'NotoSansHans-Regular.otf'
   方正粗宋: '方正粗宋_GBK.ttf'
   水木明淙: '水木明淙.TTF'
   方正诗甜宋: '方正诗甜宋 简 Medium.TTF'
   方正雪炜锐黑: '方正雪炜锐黑 简.TTF'
-  思源黑体: 'NotoSansHans-Regular.otf'
+  方正马克体: '方正马克体 简.TTF'
+  方正白舟魂心体: '方正白舟魂心体 简.TTF'
+  方正少儿: '方正少儿简体.TTF'
+  方正咆哮: '方正咆哮简体.TTF'
+  方正兰亭黑: '方正兰亭黑_GBK.ttf'
+  方正兰亭中黑: '方正兰亭中黑简体.TTF'
+  方正兰亭黑扁: '方正兰亭黑扁_GBK.TTF'
+  方正兰亭特黑: '方正兰亭特黑简体.TTF'
 chatgpt:
   # 是否允许控制浏览器
   do_automate: true
 #   do_automate: false
+#   ask_mode: 'web'
+  ask_mode: 'app'
+  click_type: 'pyautogui'
+#   click_type: 'mac'
   sleep_minute: 3
   gpt_line_max: 40
-  gpt_char_max: 1500
+#   gpt_char_max: 1500
+  gpt_char_max: 2000
 long_pic:
-#  single_width_min: 1900
   single_width_min: 2000
-#   single_width_min: 3200
   group_len: 4
-#  group_len: 6
 frame_settings:
   frame_color:
 #   frame_color: '000000'
-#  frame_color: 'ffffff'
-  min_frame_length: 3
+#   frame_color: 'ffffff'
+  min_frame_thickness: 2
+  WBN_tolerance: 20
   edge_size: 10
   edge_ratio: 0.135
+  optimize_inner: true
+#   optimize_inner: false
+  black_pxs_thres: 100
+  merge_thres: 100
+  merge_nearby: true
+#   merge_nearby: false
   # 框架宽度
   grid_width_min: 100
   # 框架高度
-  grid_height_min: 100
+  grid_height_min: 80
   # 考虑无背景无框架的画格
   #max_white_ratio: 0.5
   max_white_ratio: 0.9
@@ -89,9 +121,9 @@ frame_settings:
 #  do_add_frame: false
   frame_level: 3
   frame_thres: 0.9995
-  min_width: 60
   min_outline_len: 40
   gaps: [15, 6, 8, 8]
+#   gaps: [15, 6, 15, 15]
 #  gaps: 0
   # 是否检查由多种颜色构成漫画画格框架
   #check_2nd_color: true
@@ -107,39 +139,50 @@ bubble_condition:
   area_range: '80~1000000'
   perimeter_range: '8~40000'
   thickness_range: '3~4000'
-  br_w_range: '120~6000'
-  br_h_range: '30~6000'
+  br_w_range: '30~6000'
+#   br_w_range: '30~400'
+  br_h_range: '35~6000'
+#   br_h_range: '95~6000'
   br_wh_range: '20~6000'
   br_wnh_range: '40~6000'
   br_w_rarange: '0.003~1'
-  br_h_rarange: '0.003~1'
+  br_h_rarange: '0.003~0.3'
   br_rarange: '0.02~1.1'
 #   br_rarange: '0.9~1.1' #矩形
 #  br_rarange: '0.02~0.9' #非矩形
   br_w_prange: '0~1'
-#  br_w_prange: '0.4~1'
+#   br_w_prange: '0.5~1'
   br_h_prange: '0~1'
 #   br_h_prange: '0~0.5'
   portion_rarange: '0.00002~0.5'
-  area_perimeter_rarange: '0.0005~0.1'
+  area_perimeter_rarange: '0.005~0.1'
   bubble_px_range: '80~1000000'
   letter_px_range: '3~1000000'
   bubble_px_rarange: '0.3~0.99'
   letter_px_rarange: '0.008~0.7'
-  BnL_px_rarange: '0.5~1.1'
-  CTD_mask_px_rarange: '0.008~0.8'
-#   CTD_thres: 127
-  CTD_thres: 30
+  BnL_px_rarange: '0.7~1.1'
+  CTD_mask_px_rarange: '0.008~1.2'
+  CTD_thres: 127
+#   CTD_thres: 30
+  seg_thresh: 0.3
+  box_thresh: 0.6
+  max_candidates: 1000
+  unclip_ratio: 1.5
+  nms_thresh: 0.35
+  conf_thresh: 0.4
+  mask_thresh: 0.1
   edge_px_count_range: '0~15'
   letter_area_range: '1~9000'
 #   textblock_area_range: '200~3000000'
   textblock_area_range: '3~3000000'
-  textblock_wrange: '20~1988'
+  textblock_wrange: '60~4000'
+#   textblock_wrange: '60~400'
   textblock_hrange: '20~1000'
+#   textblock_hrange: '20~365'
   textblock_w_prange: '0~1'
-#   textblock_w_prange: '0.7~1'
+#   textblock_w_prange: '0.33~1'
   textblock_h_prange: '0~1'
-#   textblock_h_prange: '0.7~1'
+#   textblock_h_prange: '0.5~1'
   letter_cnts_range: '1~1000'
   textblock_letters_range: '1~15000'
   note_area_range: '10~6000'
@@ -148,8 +191,6 @@ bubble_condition:
   intersect_ratio: 0.1
   seg_line_range: '50~500'
   angle_px_step: 2,15
-  WBN_tolerance: 10,30,15
-#   WBN_tolerance: 60,60,60
   textline_hrange: '6~40'
   line_multi_h: 25
   line_edge_range: '1~20'
@@ -165,7 +206,7 @@ char_condition:
   brh_range: '5~7000'
 bubble_recognize:
   # 用户设置的高度差异阈值
-  max_height_diff: 28
+  max_hdiff: 28
   max_font_size: 150
   kernel_depth: 10
   block_ratio: 2
@@ -174,10 +215,8 @@ bubble_recognize:
   WLB_alpha: 30,50,30
   padding: 10
   r_dot: 5
-#   rec_pad: 2
-#   rec_pad: 5
-  rec_pad: 10
-#   rec_pad: 20
+  rec_pad_h: 5
+  rec_pad_w: 10
 #   sum_sect_max: 5
   sum_sect_max: 9999
 bubble_seg:
@@ -193,10 +232,10 @@ bubble_seg:
   check_dots: false
   check_intact: true
 #   check_intact: false
-  use_pivot_split: true
-#   use_pivot_split: false
 #   sort_by_y: true
   sort_by_y: false
+#   sort_by_x: true
+  sort_by_x: false
 ocr_settings:
   discard_ratio: 0.08
 #  y_thres: 8
@@ -206,8 +245,8 @@ ocr_settings:
   bit_thres: 127
   white_thres: 200
 #   white_thres: 250
-  bi_thres: 127
-#   bi_thres: 200
+#   bi_thres: 127
+  bi_thres: 200 #浅字淡字
   ext_padding: 15
 #   ext_padding: 90
   base_num: 5
@@ -238,6 +277,10 @@ ocr_settings:
 #   CTD_cut: whole
 #   CTD_cut: square
   CTD_cut: tile
+#   better_info: true
+  better_info: false
+  check_bottom: true
+#   check_bottom: false
   exclude_smaller: true
 #   exclude_smaller: false
   exclude_inside: true
@@ -269,6 +312,7 @@ custom_ocr_engines:
   - 'Easy'
 prompt_prefix_dic:
   Comic: '您是一位专业的漫画翻译家，精通中文和英文。您的任务是翻译英文漫画，请把下列html翻译成中文，保留原格式，并以html格式输出。在翻译过程中，请仔细分析文本的上下文和情感色彩，确保翻译准确无误。人名和专有名词也要翻译成中文。翻译时要连贯、自然且符合中文表达习惯。翻译后的段落数量需和原文段落数量一致且一一对应，不能多段变成一段。'
+#   Comic: '您是一位专业的漫画翻译家，精通中文和英文。您的任务是翻译英文漫画，请把下列html翻译成中文，保留原格式，并以html格式输出。人名和专有名词也要翻译成中文。'
   Manhua: '您是一位专业的漫画翻译家，精通中文和英文。您的任务是翻译中文漫画，请把下列html翻译成英文，保留原格式，并以html格式输出。在翻译过程中，请仔细分析文本的上下文和情感色彩，确保翻译准确无误。'
 grid_ratio_dic:
   Comic: 0.90 # 美漫彩色
@@ -276,26 +320,17 @@ grid_ratio_dic:
   Manga: 0.90 # 日漫黑白
 italic_color_locates:
 #   - 'ffd266-ffface-000000'
-#   - 'fbab3c-fff3e5-000000'
-#   - 'e5f2c7-f1f5e4-000000'
-#   - 'ccecc3-36b449'
-#   - 'fdfdbd-000000'
-#   - '0d0d0d-ffffff'
 color_patterns:
 #  - 'ffffff-15~9f2862-15' # 白底红字
-#  - 'b9e6fb-15~000000-60' # 蓝底黑字
-#  - 'fef7e5-15~000000-60' # 米底黑字
-#  - 'ffffff-15~0799b0-60' # 白底蓝字
-#  - 'e2e319-15~000000-60' # 绿底黑字
-#  - '010101-15=667b8c-15~ffffff-60' # 黑灰底白字
-#  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
 color_pattern_dic:
   Comic:
-    - 'ffffff-10~000000-60' # 白底黑字
-#     - '000000-15~ffffff-60' # 黑底白字
-#     - 'ffffff-10' # 白字
+#     - 'ffffff-10~000000-60' # 白底黑字
+#     - '000000-5~ffffff-10' # 黑底白字
+#     - 'ffffff-30' # 白字
 #     - '000000-60' # 黑字
   Manga:
 #     - 'ffffff-15~000000-60' # 白底黑字
+#     - '000000-5~ffffff-10' # 黑底白字
+#     - '000000-60' # 黑字
   Manhua:
 #     - 'ffffff-15~000000-60' # 白底黑字
