@@ -2,21 +2,21 @@ from collections import Counter, OrderedDict, defaultdict
 from colorsys import hsv_to_rgb, rgb_to_hsv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-from csv import reader, writer
+from csv import reader, writer, QUOTE_MINIMAL
 from difflib import SequenceMatcher
 from filecmp import cmp
 from functools import lru_cache, wraps
 from getpass import getuser
 from hashlib import md5
 from html import unescape
-from io import BytesIO
+from io import BytesIO, StringIO
 from itertools import chain, zip_longest
 from locale import getdefaultlocale
 from math import cos, floor, radians, sin, sqrt
 from operator import mod
 from os.path import abspath, dirname, exists, expanduser, getmtime, getsize, isdir, isfile, normpath
 from pathlib import Path
-from platform import machine, processor, system, uname
+from platform import machine, processor, system, uname, python_version
 from pprint import pprint
 from re import I, IGNORECASE, Pattern, escape, findall, finditer, match, search, sub
 from shutil import copy2
