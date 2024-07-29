@@ -2,21 +2,21 @@ from collections import Counter, OrderedDict, defaultdict
 from colorsys import hsv_to_rgb, rgb_to_hsv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-from csv import reader, writer
+from csv import reader, writer, QUOTE_MINIMAL
 from difflib import SequenceMatcher
 from filecmp import cmp
-from functools import lru_cache, wraps
+from functools import lru_cache, wraps, reduce
 from getpass import getuser
 from hashlib import md5
 from html import unescape
-from io import BytesIO
+from io import BytesIO, StringIO
 from itertools import chain, zip_longest
 from locale import getdefaultlocale
 from math import cos, floor, radians, sin, sqrt
 from operator import mod
 from os.path import abspath, dirname, exists, expanduser, getmtime, getsize, isdir, isfile, normpath
 from pathlib import Path
-from platform import machine, processor, system, uname
+from platform import machine, processor, system, uname, python_version
 from pprint import pprint
 from re import I, IGNORECASE, Pattern, escape, findall, finditer, match, search, sub
 from shutil import copy2
@@ -5482,7 +5482,8 @@ def get_added_frames(frame_grid_strs, img_raw, color_name0):
             }
 
         masks_segments = {
-            direction: get_line_segments(squeeze(mask), target_color=target_color) for direction, mask in masks.items()
+            direction: get_line_segments(squeeze(mask), target_color=target_color) if mask is not None else None
+            for direction, mask in masks.items()
         }
 
         for direction, segments in masks_segments.items():
@@ -6482,6 +6483,10 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
     :param frame_grid_strs: 框架网格字符串列表，用于确定气泡在图像中的位置和顺序。
     :param CTD_mask: 漫画文本检测器生成的气泡掩码。
     """
+    # 在函数开始时检查 bboxes 是否为 None
+    if bboxes is None:
+        logger.error("bboxes is None, defaulting to an empty list.")
+        bboxes = []
 
     added_frames_jpg = img_file.parent / f'{img_file.stem}-加框.jpg'
 
@@ -8697,6 +8702,8 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
     pic_results = []
     stem_tup = ('stem', img_file.stem)
     pic_results.append(stem_tup)
+    if img_file not in img_list:
+        return pic_results
     img_ind = img_list.index(img_file)
     page_ind = img_ind
 
