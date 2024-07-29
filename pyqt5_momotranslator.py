@@ -8702,6 +8702,8 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
     pic_results = []
     stem_tup = ('stem', img_file.stem)
     pic_results.append(stem_tup)
+    if img_file not in img_list:
+        return pic_results
     img_ind = img_list.index(img_file)
     page_ind = img_ind
 
