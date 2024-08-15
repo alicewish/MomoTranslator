@@ -1,5 +1,5 @@
-img_ind: 1
-step_str: '1'
+img_ind: 38
+step_str: '0'
 # thread_method: 'queue'
 thread_method: 'concurrent'
 # pic_thread_method: 'queue'
@@ -7,6 +7,14 @@ pic_thread_method: 'concurrent'
 do_mode: 'do_qt'
 # do_mode: 'do_dev_folder'
 # do_mode: 'do_dev_pic'
+# do_mode: 'do_roi'
+media_type: 'Comic'
+# media_type: 'Manga'
+# media_type: 'Manhua'
+# media_type: 'Manhwa'
+text_direction:
+# text_direction: 'Horizontal'
+# text_direction: 'Vertical'
 # hit_enter: true
 hit_enter: false
 use_pivot_split: true
@@ -16,27 +24,41 @@ use_pivot_split: true
 bbox_type: 'both'
 better_data: true
 # better_data: false
-lettering_type: 'normal'
+# force_trad: true
+force_trad: false
+punc_type: 'full'
+# punc_type: 'simple'
+enable_lettering: true
+# enable_lettering: false
+# lettering_type: 'normal'
+# lettering_type: '332'
 # lettering_type: '不朽'
 # lettering_type: '永恒'
 # lettering_type: 'SD'
-# lettering_type: 'HD'
+lettering_type: 'HD'
+default_chara: '女记者'
+default_dpi: 150
+custom_dpi: 150
+# custom_dpi: 96
+hide_extra: true
+# hide_extra: false
+print_type: 'prettytable'
+dist_thres: 80
 WLB_ext_px_dic:
-  Comic: 10,16,12
-#   Comic: 15,48,36
-  Manhua: 12,50,25
+  Comic: 10,15,8
+#   Comic: 15,38,56
+  Manhua: 30,40,40
+#   Manga: 10,15,18
+  Manga: 40,70,70
 docx_img_format: 'jpeg'
 #docx_img_format: 'png'
-folder_name: 'Afterlift 002'
+folder_name: 'Petals'
 area_folder_names:
 #   - 'Afterlift 001'
-# default_dpi: 300
-# default_dpi: 200
-default_dpi: 150
-# default_dpi: 96
 lettering:
   global_font_size: 30
   global_font_name: '微软雅黑'
+#   global_font_name: '苹方'
 #   global_font_name: '思源黑体'
 #   global_font_name: '方正兰亭黑'
 #  global_rec_font_name: '方正粗宋'
@@ -47,8 +69,8 @@ lettering:
 #   rec2italic: true
   rec2italic: false
 # browser: 'Safari'
-# browser: 'Google Chrome'
-browser: 'Google Chrome Dev'
+browser: 'Google Chrome'
+# browser: 'Google Chrome Dev'
 # browser: 'Google Chrome Canary'
 thumb_size: 240
 window_size: 1200,800
@@ -61,13 +83,16 @@ font_size_range_dic:
   'ffffff-000000': '30~30'
 font_size_rarange: '0.65~1.05'
 bold_thres_dic:
-  default: 1.25
+  default: 1.2
 #   'ffffff-000000': 1.2
 #   '3948a5-ffffff': 1.5
+#   'fff79a-000000': 1.3
 stem_level: 3
 font_dic:
   微软雅黑: 'msyh.ttc'
   思源黑体: 'NotoSansHans-Regular.otf'
+  苹方: 'PingFang.ttc'
+  手札: 'Hannotate.ttc'
   方正粗宋: '方正粗宋_GBK.ttf'
   水木明淙: '水木明淙.TTF'
   方正诗甜宋: '方正诗甜宋 简 Medium.TTF'
@@ -77,9 +102,12 @@ font_dic:
   方正少儿: '方正少儿简体.TTF'
   方正咆哮: '方正咆哮简体.TTF'
   方正兰亭黑: '方正兰亭黑_GBK.ttf'
+  方正兰亭准黑: '方正兰亭准黑_GBK.TTF'
   方正兰亭中黑: '方正兰亭中黑简体.TTF'
   方正兰亭黑扁: '方正兰亭黑扁_GBK.TTF'
   方正兰亭特黑: '方正兰亭特黑简体.TTF'
+  时尚中黑: 'ShiShangZhongHeiJianTi-1.ttf'
+  華康儷中黑: '華康儷中黑(P).TTF'
 chatgpt:
   # 是否允许控制浏览器
   do_automate: true
@@ -100,15 +128,15 @@ frame_settings:
 #   frame_color: '000000'
 #   frame_color: 'ffffff'
   min_frame_thickness: 2
-  WBN_tolerance: 20
+  WBN_tolerance: 5
   edge_size: 10
   edge_ratio: 0.135
   optimize_inner: true
 #   optimize_inner: false
   black_pxs_thres: 100
   merge_thres: 100
-  merge_nearby: true
-#   merge_nearby: false
+#   merge_nearby: true
+  merge_nearby: false
   # 框架宽度
   grid_width_min: 100
   # 框架高度
@@ -161,7 +189,7 @@ bubble_condition:
   bubble_px_rarange: '0.3~0.99'
   letter_px_rarange: '0.008~0.7'
   BnL_px_rarange: '0.7~1.1'
-  CTD_mask_px_rarange: '0.008~1.2'
+  CTD_mask_px_rarange: '0.004~1.2'
   CTD_thres: 127
 #   CTD_thres: 30
   seg_thresh: 0.3
@@ -172,6 +200,7 @@ bubble_condition:
   conf_thresh: 0.4
   mask_thresh: 0.1
   edge_px_count_range: '0~15'
+  border_thickness_range: '1~5'
   letter_area_range: '1~9000'
 #   textblock_area_range: '200~3000000'
   textblock_area_range: '3~3000000'
@@ -180,9 +209,9 @@ bubble_condition:
   textblock_hrange: '20~1000'
 #   textblock_hrange: '20~365'
   textblock_w_prange: '0~1'
-#   textblock_w_prange: '0.33~1'
+#   textblock_w_prange: '0~0.5'
   textblock_h_prange: '0~1'
-#   textblock_h_prange: '0.5~1'
+#   textblock_h_prange: '0~0.2'
   letter_cnts_range: '1~1000'
   textblock_letters_range: '1~15000'
   note_area_range: '10~6000'
@@ -192,9 +221,12 @@ bubble_condition:
   seg_line_range: '50~500'
   angle_px_step: 2,15
   textline_hrange: '6~40'
+  textline_wrange: '6~40'
   line_multi_h: 25
+  line_multi_w: 25
   line_edge_range: '1~20'
   dot_line_h: 5
+  dot_line_w: 5
   dot_h: 4
   bulk_thres: 0
   overlap_ratio: 0.15
@@ -219,6 +251,7 @@ bubble_recognize:
   rec_pad_w: 10
 #   sum_sect_max: 5
   sum_sect_max: 9999
+  lower_ratio: 0.2
 bubble_seg:
   use_rec: true
 #   use_rec: false
@@ -243,10 +276,9 @@ ocr_settings:
   min_char_area: 3
   min_cnt_area: 9
   bit_thres: 127
-  white_thres: 200
-#   white_thres: 250
-#   bi_thres: 127
-  bi_thres: 200 #浅字淡字
+  white_thres: 160
+  bi_thres: 127
+#   bi_thres: 200 #浅字淡字
   ext_padding: 15
 #   ext_padding: 90
   base_num: 5
@@ -322,15 +354,72 @@ italic_color_locates:
 #   - 'ffd266-ffface-000000'
 color_patterns:
 #  - 'ffffff-15~9f2862-15' # 白底红字
+#  - 'b9e6fb-15~000000-60' # 蓝底黑字
+#  - 'fef7e5-15~000000-60' # 米底黑字
+#  - 'ffffff-15~0799b0-60' # 白底蓝字
+#  - 'e2e319-15~000000-60' # 绿底黑字
+#  - '010101-15=667b8c-15~ffffff-60' # 黑灰底白字
+#  - 'e5398b-15=50396d-15~ffffff-60' # 红紫底白字
 color_pattern_dic:
   Comic:
+#    - 'ffffff-10~f11b27-20=000000-90' # 白底红黑字
     - 'ffffff-10~000000-60' # 白底黑字
+#     - 'ffffff-4~000000-60' # 白底黑字
+#     - 'ffffff-10~ed018a-60' # 白底粉字
+#     - 'ffffff-10~8b8b8d-10' # 白底灰字
+#     - 'ffffff-10~a7a5a6-20' # 白底灰字
+#     - 'fff79a-15~000000-60' # 黄底黑字
+#     - 'fffbcc-15~000000-60' # 黄底黑字
+#     - 'fcfbcf-15~000000-60' # 黄底黑字
+#     - 'f9c9df-15~1b3981-60' # 粉底蓝字
+#     - '9fce5a-15~000000-60' # 绿底黑字
+#     - 'e1f2f9-10~2c4971-30' # 蓝底黑字
+#     - 'ffffff-10~972e32-60' # 白底红字
+#     - 'ffffff-10~9b2c32-60' # 白底红字
+#     - 'ffffff-10~972e32-60' # 白底红字
+#     - 'ffffff-10~962d31-10' # 白底红字
+#     - 'ffffff-10~9c6c58-20' # 白底褐字
 #     - '000000-5~ffffff-10' # 黑底白字
+#     - '0d0d0d-10~ffffff-30' # 黑底白字
+#     - '00adef-90~ffffff-30' # 蓝底白字
+#     - 'fdc904-30~ffffff-30' # 黄底白字
+#     - '000000-15~6ac7cf-30' # 黑底蓝字
+#    - 'fdfbfc-15=c08fa2-15~000000-60' # 白红底黑字
+#    - '3e3c3d-15=908e8f-15~ffffff-60' # 黑灰底白字
 #     - 'ffffff-30' # 白字
+#     - 'b3b8bb-30' # 灰字
+#     - '777777-20' # 灰字
 #     - '000000-60' # 黑字
+#     - 'ec018e-60' # 粉字
+#     - 'b0e4fa-60' # 蓝字
+#     - 'ceeef9-10' # 蓝字
+#     - 'a9c9d6-10' # 蓝字
+#     - '1e487a-30' # 蓝字
+#     - '4a0f15-60' # 黑字
+#     - 'f13833-20' # 红字
+#     - 'c73b22-20' # 红字
+#     - 'fdddec-20' # 粉字
+#     - 'fdcee0-20' # 粉字
+#     - '933e93-20' # 紫字
+#     - '00642e-30' # 绿字
+#     - '038849-30' # 绿字
+#     - 'fef43a-60' # 黄字
+#     - 'fdaf17-60' # 黄字
+#     - 'fff53e-60' # 黄字
+#     - 'fffbb1-30' # 黄字
+#     - 'fdfdc9-30' # 黄字
+#     - 'fffbcc-30' # 黄字
+#     - 'e5bd1d-30' # 黄字
+#     - 'fffdcd-30' # 黄字
+#     - 'f6ed22-30' # 黄字
   Manga:
     - 'ffffff-15~000000-60' # 白底黑字
-#     - '000000-5~ffffff-10' # 黑底白字
+#     - 'ffffff-3~656565-60' # 白底灰字
+#     - 'e2e2e2-15~000000-60' # 灰底黑字
+#     - '000000-15~ffffff-60' # 黑底白字
+#     - '303030-15~ffffff-60' # 黑底白字
+#     - 'ffffff-30' # 白字
 #     - '000000-60' # 黑字
+#     - '656565-60' # 灰字
   Manhua:
-    - 'ffffff-15~000000-60' # 白底黑字
+#     - 'ffffff-15~000000-60' # 白底黑字
