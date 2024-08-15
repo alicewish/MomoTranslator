@@ -1,33 +1,130 @@
+from opencc import OpenCC
+
+import codecs
+import os
+import os.path
+import pickle
+import re
+import sys
+from collections import OrderedDict
+from csv import reader, writer, QUOTE_MINIMAL
+from filecmp import cmp
+from functools import partial, lru_cache, reduce, wraps
+from getpass import getuser
+from hashlib import md5
+from io import StringIO
+from locale import getdefaultlocale
+from math import sqrt
+from os.path import abspath, dirname, exists, expanduser, getsize, isfile, normpath
+from pathlib import Path
+from platform import machine, processor, python_version, system, uname
+from re import I, IGNORECASE, escape, findall, match
+from shutil import copy2
+from subprocess import PIPE, Popen
+from time import strftime, time
+from traceback import print_exc
+from unicodedata import normalize
+from uuid import getnode
+
+import yaml
+from PIL import Image
+from PyQt6.QtCore import QEventLoop, QTimer, QItemSelectionModel, QSize, Qt, pyqtSignal, QTranslator, QPoint
+from PyQt6.QtGui import QAction, QActionGroup, QBrush, QDoubleValidator, QFont, QIcon, QImage, \
+    QKeySequence, QPainter, QPixmap, QStandardItemModel, QColor, QPen, QStandardItem
+from PyQt6.QtWidgets import QAbstractItemView, QApplication, QDockWidget, QFileDialog, \
+    QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QListView, \
+    QListWidget, QListWidgetItem, QMainWindow, QMenu, QStatusBar, QGraphicsSceneMouseEvent, \
+    QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget, QFrame, QHeaderView, QPlainTextEdit, QSizePolicy, \
+    QTableView, QGraphicsTextItem, QGraphicsEllipseItem, QGraphicsItem, QGraphicsItemGroup, QStyledItemDelegate
+from cv2 import COLOR_BGR2RGB, COLOR_BGRA2BGR, COLOR_GRAY2BGR, COLOR_RGB2BGR, cvtColor, imdecode, imencode
+from loguru import logger
+from matplotlib import colormaps
+from natsort import natsorted
+from numpy import array, clip, fromfile, ndarray, ones, sqrt, uint8
+from psutil import virtual_memory
+from qtawesome import icon as qicon
+from ruamel.yaml import YAML
+from webcolors import hex_to_rgb, name_to_rgb, rgb_to_name
+from webcolors._definitions import _reversedict, _CSS3_NAMES_TO_HEX
+from PyQt6.QtCore import QByteArray, QCommandLineOption, QCommandLineParser, QCoreApplication, QDate, \
+    QEventLoop, QItemSelection, QItemSelectionModel, QModelIndex, QPoint, QRegularExpression, QSettings, QSize, \
+    QThread, QTimer, QTranslator, QUrl, QVariant, Qt, pyqtSignal
+from PyQt6.QtGui import QAction, QColor, QFont, QGuiApplication, QImage, QKeySequence, QPainter, QPalette, \
+    QPixmap, QRegularExpressionValidator, QStandardItem, QStandardItemModel, QTextDocumentFragment, QWindow
+from PyQt6.QtNetwork import QNetworkProxyFactory
+from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+from PyQt6.QtWidgets import QAbstractItemView, QApplication, QButtonGroup, QCalendarWidget, QCheckBox, \
+    QComboBox, QDockWidget, QFontComboBox, QFontDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, \
+    QHeaderView, QLCDNumber, QLabel, QLineEdit, QListWidget, QMainWindow, QMenu, QMenuBar, QMessageBox, \
+    QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy, QSlider, QSpacerItem, \
+    QSpinBox, QSplitter, QStatusBar, QStyleFactory, QTabBar, QTabWidget, QTableView, QTextEdit, QToolBar, \
+    QToolButton, QTreeWidget, QVBoxLayout, QWidget, QStyledItemDelegate
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from manga_ocr import MangaOcr
+from nltk.tokenize import sent_tokenize
+from pandas import DataFrame
+import asyncio
+import builtins
+import codecs
+import json
+import math
+import os
+import os.path
+import pickle
+import re
+import string
+import sys
+import warnings
+import webbrowser
+from ast import AsyncFunctionDef, Attribute, ClassDef, FunctionDef, Import, ImportFrom, Name, NodeTransformer, \
+    NodeVisitor, Pass, parse, unparse, walk
 from collections import Counter, OrderedDict, defaultdict
 from colorsys import hsv_to_rgb, rgb_to_hsv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-from csv import reader, writer
+from csv import reader, writer, QUOTE_MINIMAL
+from datetime import datetime
 from difflib import SequenceMatcher
 from filecmp import cmp
-from functools import lru_cache, wraps
 from getpass import getuser
 from hashlib import md5
 from html import unescape
-from io import BytesIO
-from itertools import chain, zip_longest
+from io import BytesIO, StringIO
+from itertools import chain, groupby, zip_longest
 from locale import getdefaultlocale
-from math import cos, floor, radians, sin, sqrt
+from math import ceil, cos, floor, radians, sin, sqrt
 from operator import mod
+from os import getcwd, makedirs
 from os.path import abspath, dirname, exists, expanduser, getmtime, getsize, isdir, isfile, normpath
 from pathlib import Path
-from platform import machine, processor, system, uname
+from platform import machine, platform, processor, python_version, release, system, uname, version
 from pprint import pprint
-from re import I, IGNORECASE, Pattern, escape, findall, finditer, match, search, sub
+from re import I, IGNORECASE, Pattern, escape, findall, finditer, match, search, sub, split
+from re import compile as recompile
 from shutil import copy2
-from statistics import median, multimode
+from socket import gethostbyname, gethostname
+from statistics import mean, median, multimode
+from string import ascii_uppercase
 from subprocess import PIPE, Popen, call
-from time import sleep, strftime, time
+from textwrap import dedent, indent
+from time import localtime, sleep, strftime, time
+from tokenize import COMMENT, generate_tokens
 from traceback import print_exc
-from typing import Union
+from typing import List, Union
 from unicodedata import normalize
 from uuid import getnode, uuid4
 from warnings import filterwarnings
+import cv2
+import numpy as np
+import pkg_resources
+import pyautogui
+import pyperclip
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision
+import xmltodict
+import yaml
 from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import fromarray
 from PyQt6.QtCore import QPointF, QRectF, QSettings, QSize, QTranslator, Qt, pyqtSignal
@@ -39,62 +136,71 @@ from PyQt6.QtWidgets import QAbstractItemView, QApplication, QButtonGroup, QComb
     QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QRadioButton, QStatusBar, \
     QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget
 from aip import AipOcr
+from astor import to_source
 from bs4 import BeautifulSoup, NavigableString, Tag
 from cv2 import BORDER_CONSTANT, CHAIN_APPROX_SIMPLE, COLOR_BGR2BGRA, COLOR_BGR2GRAY, COLOR_BGR2RGB, COLOR_BGRA2BGR, \
-    COLOR_BGRA2RGBA, COLOR_GRAY2BGR, COLOR_GRAY2BGRA, COLOR_RGB2BGR, FILLED, INTER_LINEAR, RETR_EXTERNAL, RETR_LIST, \
-    RETR_TREE, THRESH_BINARY, add, arcLength, bitwise_and, bitwise_not, boundingRect, circle, contourArea, \
-    copyMakeBorder, cvtColor, dilate, dnn, drawContours, erode, findContours, imdecode, imencode, inRange, line, mean, \
-    moments, pointPolygonTest, rectangle, resize, subtract, threshold
+    COLOR_BGRA2RGBA, COLOR_GRAY2BGR, COLOR_GRAY2BGRA, COLOR_RGB2BGR, CV_16U, FILLED, GaussianBlur, IMREAD_COLOR, \
+    INPAINT_NS, INTER_LINEAR, MORPH_ELLIPSE, MORPH_RECT, RANSAC, RETR_EXTERNAL, RETR_LIST, RETR_TREE, \
+    ROTATE_90_COUNTERCLOCKWISE, THRESH_BINARY, THRESH_OTSU, add, arcLength, bitwise_and, bitwise_not, bitwise_or, \
+    bitwise_xor, boundingRect, boxPoints, circle, connectedComponentsWithStats, contourArea, copyMakeBorder, cvtColor, \
+    dilate, dnn, drawContours, erode, fillPoly, findContours, findHomography, getStructuringElement, imdecode, imencode, \
+    inRange, inpaint, line, minAreaRect, moments, pointPolygonTest, rectangle, resize, rotate, subtract, threshold, \
+    warpPerspective
 from deep_translator import GoogleTranslator
 from docx import Document
 from docx.shared import Inches
 from easyocr import Reader
 from fontTools.ttLib import TTCollection, TTFont
+from html2text import HTML2Text
+from jieba import cut
+from libcst import CSTTransformer, RemovalSentinel, parse_module
 from loguru import logger
 from mammoth import convert_to_html
 from matplotlib import colormaps, font_manager
 from natsort import natsorted
 from nltk.corpus import names, words
 from nltk.stem import WordNetLemmatizer
-from numpy import arange, argmax, argwhere, array, asarray, ascontiguousarray, clip, diff, float32, fromfile, greater, \
-    int32, maximum, minimum, mod, ndarray, nonzero, ones, sqrt, squeeze, subtract, transpose, uint8, unique, where, \
-    zeros, zeros_like
+from numpy import arange, argmax, argmin, argsort, argwhere, array, asarray, ascontiguousarray, clip, diff, float16, \
+    float32, float64, frombuffer, fromfile, greater, int16, int32, int64, linalg, maximum, minimum, mod, ndarray, \
+    nonzero, ones, ones_like, percentile, sqrt, squeeze, std, subtract, transpose, uint8, unique, where, zeros, \
+    zeros_like
 from paddleocr import PaddleOCR
+from pathvalidate import sanitize_filename
 from prettytable import PrettyTable
 from psd_tools import PSDImage
 from psutil import virtual_memory
+from pyautogui import locateOnScreen, locateAllOnScreen, center, click, press, keyDown, keyUp
+from pyclipper import ET_CLOSEDPOLYGON, JT_ROUND, PyclipperOffset
 from pypandoc import convert_text
 from pytesseract import image_to_data, image_to_string
+from pytz import UTC
 from qtawesome import icon as qicon
 from ruamel.yaml import YAML
 from scipy import ndimage
+from scipy.optimize import lsq_linear, nnls
 from scipy.signal import argrelextrema
-from shapely.geometry import LineString, MultiLineString, MultiPoint, Point, Polygon
+from shapely.geometry import LineString, MultiLineString, MultiPoint, Point, Polygon, box
 from shapely.ops import nearest_points
 from skimage.segmentation import watershed
-from webcolors import CSS3_HEX_TO_NAMES, hex_to_rgb, name_to_rgb, rgb_to_name
-import codecs
-import numpy as np
-import os
-import os.path
-import pickle
-import pyperclip
-import re
-import spacy
-import string
-import sys
-import webbrowser
-import xmltodict
-import yaml
+from stdlib_list import stdlib_list
+from unidecode import unidecode
+from webcolors import hex_to_rgb, name_to_rgb, rgb_to_name
+from webcolors._definitions import _reversedict, _CSS3_NAMES_TO_HEX
+
+filterwarnings("ignore", category=DeprecationWarning)
 
 use_torch = True
 # use_torch = False
 if use_torch:
     import torch
 
-filterwarnings("ignore", category=DeprecationWarning)
+use_nlp = True
+use_nlp = False
+if use_nlp:
+    import spacy
 
-nlp = spacy.load("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
+
 # python3 -m spacy download en_core_web_sm #Mac
 # python.exe -m spacy download en_core_web_sm #Win
 
@@ -112,6 +218,12 @@ good_names = set(names.words())
 good_words = good_words.union(good_names)
 
 lemmatizer = WordNetLemmatizer()
+
+python_ver = python_version()
+
+# 创建转换实例，s2t表示简体到繁体，t2s表示繁体到简体
+cc_s2t = OpenCC('s2t')  # 简体到繁体
+cc_t2s = OpenCC('t2s')  # 繁体到简体
 
 
 # ================================参数区================================
@@ -228,6 +340,7 @@ type_dic = {
     'css': '.css',
     'js': '.js',
     'markdown': ('.md', '.markdown'),
+    'yml': ('.yml', '.yaml'),
 }
 
 ram = str(round(virtual_memory().total / (1024.0 ** 3)))
@@ -317,6 +430,8 @@ color_slate_blue = (205, 90, 106)  # 石板蓝色
 color_medium_sea_green = (113, 179, 60)  # 中等海洋绿色
 
 rgba_white = (255, 255, 255, 255)
+trans_white = (255, 255, 255, 127)
+q_trans_white = QColor(255, 255, 255, 127)
 rgba_zero = (0, 0, 0, 0)
 rgba_black = (0, 0, 0, 255)
 
@@ -348,7 +463,8 @@ not_end_char = '太每帮跟另向'
 
 valid_chars = set('.,;!?-—`~!@#$%^&*()_+={}[]|\\:;"\'<>,.?/')
 
-punc_table = str.maketrans(r'：；，。！？“”‘’（）', r""":;,.!?""''()""")
+punc_table_full = str.maketrans(r'：；，。！？“”‘’（）', r""":;,.!?""''()""")
+punc_table_simple = str.maketrans(r'：；，。！？（）', r""":;,.!?()""")
 
 proper_nouns = {
     'Insomnia',
@@ -460,12 +576,16 @@ media_lang_dict = {
 easyocr_language_map = {
     'English': 'en',
     'Chinese Simplified': 'ch_sim',
+    'Japanese': 'ja',
 }
+
+# 南非语（af），阿塞拜疆语（az），波斯尼亚语（bs），简体中文（ch_sim），繁体中文（ch_tra），捷克语（cs），威尔士语（cy），丹麦语（da），德语（de），英语（en） ），西班牙语（es），爱沙尼亚语（et），法语（fr），爱尔兰语（ga），克罗地亚语（hr），匈牙利语（hu），印度尼西亚语（id），冰岛语（is），意大利语（it），日语（ja） ），韩文（ko），库尔德（ku），拉丁语（la），立陶宛语（lt），拉脱维亚语（lv），毛利人（mi），马来语（ms），马耳他语（mt），荷兰语（nl），挪威语（否），奥克西唐（oc），波兰语（pl），葡萄牙语（pt），罗马尼亚语（ro），塞尔维亚语（拉丁语）（rs_latin），斯洛伐克语（sk）（需要重新访问），斯洛文尼亚语（sl），阿尔巴尼亚语（sq），瑞典语（sv），斯瓦希里语（sw），泰语（th），他加禄语（tl），土耳其语（tr），乌兹别克（uz），越南语（vi）
 
 paddleocr_language_map = {
     'English': 'en',
     'Chinese Simplified': 'ch',
     'Chinese Traditional': 'chinese_cht',
+    'Japanese': 'japan',
 }
 paddle_langs = [
     'ch', 'en', 'korean', 'japan', 'chinese_cht', 'ta', 'te', 'ka', 'latin', 'arabic', 'cyrillic', 'devanagari',
@@ -554,8 +674,14 @@ device = 'cpu'
 scaleup = True
 stride = 64
 
+p_zh_char = re.compile(r'[^\u4e00-\u9fffA-Za-z，。、,\. ]')
+p_zh = re.compile(r'[\u4e00-\u9fff]')
+p_en = re.compile(r'\b[A-Za-z]+\b')
 p_color = re.compile(r'([a-fA-F0-9]{6})-?(\d{0,3})', I)
 p_issue_w_dot = re.compile(r'(.+?)(?!\d) (\d{2,5})', I)
+p_num_chara = re.compile(r'(\d+)(\D+)')
+p_comment = re.compile(r'^(\*|[①-⑨])')
+p_lp_coor = re.compile(r'----------------\[(\d+)\]----------------\[(\d+\.\d+),(\d+\.\d+),(\d+)\]', I)
 
 # 使用matplotlib的tab20颜色映射
 colormap_tab20 = colormaps['tab20']
@@ -590,6 +716,13 @@ baidu_language_options = {
     'English': 'ENG',
     'Japanese': 'JPN',
     'Korean': 'KOR',
+}
+
+font2ps_dic = {
+    '时尚中黑': 'TRENDS',
+    '苹方': 'PingFangSC-Regular',
+    '手札': 'HannotateSC-W5',
+    '微软雅黑': 'MicrosoftYaHei',
 }
 
 # 创建一个新的 KeyboardEvent，模拟按下回车键。
@@ -669,6 +802,8 @@ prompt_1st_line = chatGPT4o_prompt.splitlines()[0]
 
 chatgpt_prefix = 'https://chatgpt.com/'
 
+gpt4o_spec_str = '这张图片是来自漫画'
+
 
 # ================================基础函数区================================
 def a2_base():
@@ -724,6 +859,8 @@ kernalh1w20 = kernel_hw(1, 20)
 kernalh5w1 = kernel_hw(5, 1)
 kernalh8w1 = kernel_hw(8, 1)
 kernalh10w1 = kernel_hw(10, 1)
+
+CSS3_HEX_TO_NAMES = _reversedict(_CSS3_NAMES_TO_HEX)
 
 
 def timer_decorator(func):
@@ -878,7 +1015,6 @@ def filter_items(old_list, prefix=pre_tuple, infix=scan_tuple, suffix=pic_tuple,
     # 使用列表推导式来过滤原始列表
     # 对于列表中的每一个元素，我们先获取其指定的属性（'name'或'stem'），然后检查是否应该排除
     filtered_list = [item for item in old_list if not is_excluded(getattr(item, item_attr))]
-
     return filtered_list
 
 
@@ -889,16 +1025,16 @@ def get_valid_imgs(rootdir, vmode='raw'):
     pngs = [x for x in all_pics if x.suffix.lower() == '.png']
 
     all_masks = [x for x in pngs if '-Mask-' in x.stem]
+    all_Whitens = [x for x in pngs if x.stem.endswith('-Whiten')]
+    exclude_pngs = all_masks + all_Whitens
     no_masks = [x for x in pngs if '-Mask-' not in x.stem]
 
     valid_jpgs = filter_items(jpgs)
     valid_pngs = filter_items(no_masks)
 
-    valid_img_list = []
-    if valid_jpgs:
-        valid_img_list = valid_jpgs
-    elif valid_pngs:
-        valid_img_list = valid_pngs
+    valid_img_list = [x for x in all_pics if x not in exclude_pngs]
+    valid_img_list = filter_items(valid_img_list)
+
     if vmode == 'raw':
         valid_imgs = valid_img_list
     else:
@@ -2030,7 +2166,9 @@ def update_font_metadata(font_meta_csv, font_head):
                 if font_path.suffix.lower() == '.ttc':
                     font_collection = TTCollection(font_path)
                     # 对于TTC文件，处理每个字体
-                    for font in font_collection.fonts:
+                    fonts = font_collection.fonts
+                    for f in range(len(fonts)):
+                        font = fonts[f]
                         font_name = process_font(font)
                         postscript_name = font['name'].getName(6, 3, 1, 0x409)
                         if postscript_name:
@@ -2049,9 +2187,9 @@ def update_font_metadata(font_meta_csv, font_head):
                 meta_list = [x for x in meta_list if x[0] and x[1]]
                 if meta_list:
                     imes += f', Meta: {meta_list=}'
-                    meta_list0 = meta_list[0]
-                    font_meta = (font_path.name,) + meta_list0
-                    font_meta_list.append(font_meta)
+                    for meta_ent in meta_list:
+                        font_meta = (font_path.name,) + meta_ent
+                        font_meta_list.append(font_meta)
                 logger.debug(imes)
         font_meta_list = reduce_list(font_meta_list)
         font_meta_list.sort()
@@ -2793,7 +2931,7 @@ def get_textblock_bubbles(img_raw, all_textblocks):
 
 
 # @logger.catch
-def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mask):
+def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mask, bboxes=None):
     ih, iw = bubble_mask.shape[0:2]
     black_bg = zeros((ih, iw), dtype=uint8)
     all_contours, hierarchy = findContours(bubble_mask, RETR_TREE, CHAIN_APPROX_SIMPLE)
@@ -2839,13 +2977,13 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             condition_a5,
             condition_a6,
             condition_a7,
-            condition_a8,
-            condition_a9,
-            condition_a10,
-            condition_a11,
-            condition_a12,
-            condition_a13,
-            condition_a14,
+            # condition_a8,
+            # condition_a9,
+            # condition_a10,
+            # condition_a11,
+            # condition_a12,
+            # condition_a13,
+            # condition_a14,
         ]
 
         if all(condition_as):
@@ -2930,11 +3068,29 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
                 # 检查left_sample在filled_contour内部的面积是否不小于filled_contour面积的30%
                 condition_b12 = left_sample_px >= 0.1 * filled_contour_area
                 if do_dev_pic:
-                    left_sample_png = current_dir / 'left_sample.png'
-                    left_sample_in_contour_png = current_dir / 'left_sample_in_contour.png'
+                    left_sample_png = debug_dir / f'{media_type}_left_sample.png'
+                    left_sample_in_contour_png = debug_dir / f'{media_type}_left_sample_in_contour.png'
                     write_pic(left_sample_png, left_sample)
                     if condition_b12:
                         write_pic(left_sample_in_contour_png, left_sample_in_contour)
+
+            if bboxes:
+                condition_b0 = False
+                if cnt.polygon:
+                    # 确保轮廓足以构成多边形
+                    for bbox in bboxes:
+                        bbox_polygon = box(*bbox)
+                        # 计算两个多边形的交集
+                        intersection = cnt.polygon.intersection(bbox_polygon)
+                        # 返回重叠区域的面积
+                        overlap_area = intersection.area
+                        min_area = min(100, int(0.5 * bbox_polygon.area))
+                        if overlap_area >= min_area:
+                            condition_b0 = True
+                            # 如果找到至少一个满足条件的bbox，就不再继续检查这个cnt
+                            break
+            else:
+                condition_b0 = True
 
             condition_b1 = bubble_px_ratio_min <= bubble_px_ratio <= bubble_px_ratio_max
             condition_b2 = letter_px_ratio_min <= letter_px_ratio <= letter_px_ratio_max
@@ -2942,20 +3098,20 @@ def get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mas
             condition_b4 = letter_px_min <= letter_px <= letter_px_max
             condition_b5 = BnL_px_ratio_min <= BnL_px_ratio <= BnL_px_ratio_max
             condition_b6 = edge_px_count_min <= letter_inner_px_cnt <= edge_px_count_max
-            # condition_b7 = 0.6 <= border_thickness <= 5
-            condition_b7 = 1 <= border_thickness <= 5
+            condition_b7 = border_thickness_min <= border_thickness <= border_thickness_max
             condition_b8 = (len(max_out_letter_cnts) == 0)
             condition_b9 = CTD_mask_px_ratio_min <= CTD_mask_px_ratio <= CTD_mask_px_ratio_max
             condition_b10 = len(dot_cnts) <= 50
             condition_b11 = letter_cnts_min <= len(letter_cnts) <= letter_cnts_max
             condition_bs = [
+                condition_b0,
                 condition_b1,
                 condition_b2,
                 condition_b3,
                 condition_b4,
                 condition_b5,
                 condition_b6,
-                # condition_b7,
+                condition_b7,
                 # condition_b8,
                 condition_b9,
                 # condition_b10,
@@ -2996,11 +3152,178 @@ def order2yaml(order_yml, ordered_cnts, custom_cnts, img_file):
         logger.debug(f"已保存到{order_yml}")
 
 
+def get_paint_colors(group):
+    # 根据group选择颜色
+    if group == 1:
+        dot_color = QColor('red')
+        text_color = QColor('purple')
+    elif group == 2:
+        dot_color = QColor('blue')
+        text_color = QColor('navy')
+    else:
+        dot_color = QColor('green')
+        text_color = QColor('maroon')
+    return dot_color, text_color
+
+
+@logger.catch
+def get_formatted_stem(file_stem, format='txt'):
+    if format == 'doc':
+        formatted_stem = file_stem
+    elif format == 'html':
+        formatted_stem = f'<p>{file_stem}</p>'
+    else:  # format == 'txt':
+        formatted_stem = f'>>>>>>>>[{file_stem.name}]<<<<<<<<'
+    formatted_stem = normalize('NFC', formatted_stem)
+    # logger.debug(f'{formatted_stem=}')
+    return formatted_stem
+
+
+@logger.catch
+def find_bubbles(text_input):
+    bubbles = []
+    if isinstance(text_input, str):
+        textlines = text_input.splitlines()
+    else:
+        textlines = text_input
+    coor_inds = []
+    for t in range(len(textlines)):
+        textline = textlines[t]
+        m_lp_coor = p_lp_coor.match(textline)
+        if m_lp_coor:
+            coor_inds.append(t)
+    coor_inds.append(len(textlines) - 1)
+
+    for c in range(len(coor_inds) - 1):
+        coor_ind = coor_inds[c]
+        next_coor_ind = coor_inds[c + 1]
+        textline = textlines[coor_ind]
+        m_lp_coor = p_lp_coor.match(textline)
+        if m_lp_coor:
+            bubble_id = int(m_lp_coor.group(1))
+            coor_x = float(m_lp_coor.group(2))
+            coor_y = float(m_lp_coor.group(3))
+            group = int(m_lp_coor.group(4))
+            content_lines = textlines[coor_ind + 1:next_coor_ind - 1]
+            content = lf.join(content_lines)
+            bubble = {
+                'id': bubble_id,
+                'coor_x': coor_x,
+                'coor_y': coor_y,
+                'group': group,
+                'content': content
+            }
+            bubbles.append(bubble)
+    return bubbles
+
+
+@logger.catch
+def create_index_dict(file_stems, full_paragraphs, format='doc'):
+    """根据图片文件名（不包括扩展名）和段落列表创建索引字典和索引列表"""
+    full_paragraphs_normalized = [normalize('NFC', paragraph) for paragraph in full_paragraphs]
+    index_dict = {}
+    last_ind = 0
+    indexes = []
+    for i, file_stem in enumerate(file_stems):
+        formatted_stem = get_formatted_stem(file_stem, format)
+        if formatted_stem in full_paragraphs[last_ind:]:
+            ind = full_paragraphs[last_ind:].index(formatted_stem) + last_ind
+            index_dict[formatted_stem] = ind
+            indexes.append(ind)
+            last_ind = ind
+    indexes.append(len(full_paragraphs))
+    return index_dict, indexes
+
+
+@timer_decorator
+def create_para_dic(file_stems, index_dict, indexes, lines, format='doc'):
+    """根据图片文件名、索引字典、索引列表和行列表创建段落字典"""
+    pin = 0
+    para_dic = {}
+    start_inds = []
+    # 初始化'head'部分
+    if indexes:
+        start_ind = 0
+        end_ind = indexes[0]
+        if end_ind > 0:
+            stem_text_list = lines[start_ind:end_ind]
+            para_dic['head'] = stem_text_list
+    for file_stem in file_stems:
+        formatted_stem = get_formatted_stem(file_stem, format)
+        if formatted_stem in index_dict:
+            start_ind = indexes[pin] + 1
+            start_inds.append(start_ind)
+            end_ind = indexes[pin + 1]
+            pin += 1
+            stem_text_list = lines[start_ind:end_ind]
+            if format == 'txt':
+                rlp_pic_bubbles = find_bubbles(stem_text_list)
+                para_dic[formatted_stem] = rlp_pic_bubbles
+            else:
+                para_dic[formatted_stem] = stem_text_list
+    return para_dic
+
+
+lp_head = """
+1,0
+-
+框内
+框外
+-
+Default Comment
+You can edit me
+"""
+
+
+@logger.catch
+def read_rlp(rlp_txt, img_list):
+    if rlp_txt.exists():
+        rlp_text = read_txt(rlp_txt, encoding='utf-8-sig')
+        rlp_lines = rlp_text.splitlines()
+        rlp_index_dict, rlp_inds = create_index_dict(img_list, rlp_lines, 'txt')
+        rlp_para_dic = create_para_dic(img_list, rlp_index_dict, rlp_inds, rlp_lines, 'txt')
+    else:
+        rlp_para_dic = {}
+        head = lp_head.strip().splitlines()
+        head += ['', '']
+        rlp_para_dic['head'] = head
+        for i in range(len(img_list)):
+            img_file = img_list[i]
+            formatted_stem = get_formatted_stem(img_file)
+            rlp_para_dic[formatted_stem] = []
+    return rlp_para_dic
+
+
+@logger.catch
+def save_rlp(rlp_txt, rlp_para_dic, img_list):
+    rlp_lines = []
+    rlp_lines += rlp_para_dic['head']
+    for i in range(len(img_list)):
+        img_file = img_list[i]
+        formatted_stem = get_formatted_stem(img_file)
+        rlp_lines.append(formatted_stem)
+        rlp_pic_bubbles = rlp_para_dic.get(formatted_stem, [])
+        for r in range(len(rlp_pic_bubbles)):
+            # ================针对每一个气泡================
+            rlp_pic_bubble = rlp_pic_bubbles[r]
+            id = rlp_pic_bubble['id']
+            coor_x = rlp_pic_bubble['coor_x']
+            coor_y = rlp_pic_bubble['coor_y']
+            group = rlp_pic_bubble['group']
+            content = rlp_pic_bubble['content']
+            meta_line = f'----------------[{id}]----------------[{coor_x:.3f},{coor_y:.3f},{group}]'
+            rlp_lines.append(meta_line)
+            rlp_lines.extend(content.splitlines())
+            rlp_lines.append('')
+        rlp_lines.append('')
+    rlp_text = lf.join(rlp_lines)
+    write_txt(rlp_txt, rlp_text)
+
+
 class AppConfig:
     # 设置默认配置文件路径和用户配置文件路径
     default_config_yml = UserDataFolder / f'{APP_NAME}_config.yml'
-    python_ver = python_version()
-    if python_ver in ['3.10.9']:
+    if python_ver in ['3.11.8']:
         user_config_yml = UserDataFolder / f'{APP_NAME}_{processor_name}_{ram}GB_anaconda_config.yml'
     else:
         user_config_yml = UserDataFolder / f'{APP_NAME}_{processor_name}_{ram}GB_config.yml'
@@ -3307,16 +3630,27 @@ class Contr:
     def add_stroke(self, stroke):
         self.strokes.append(stroke)
 
-    def add_line_polygon(self, nw):
-        self.line_polygon = Polygon([
-            (0, self.br_y),
-            (nw, self.br_y),
-            (nw, self.br_v),
-            (0, self.br_v)
-        ])
-        self.line_br = [0, self.br_y, nw, self.br_h]
-        self.line_br_xy = (0, self.br_y)
-        self.line_br_uv = (nw, self.br_v)
+    def add_line_polygon(self, nw, nh):
+        if text_direction == 'Horizontal':
+            self.line_polygon = Polygon([
+                (0, self.br_y),
+                (nw, self.br_y),
+                (nw, self.br_v),
+                (0, self.br_v)
+            ])
+            self.line_br = [0, self.br_y, nw, self.br_h]
+            self.line_br_xy = (0, self.br_y)
+            self.line_br_uv = (nw, self.br_v)
+        else:
+            self.line_polygon = Polygon([
+                (self.br_x, 0),
+                (self.br_u, 0),
+                (self.br_u, nh),
+                (self.br_x, nh)
+            ])
+            self.line_br = [self.br_x, 0, self.br_w, nh]
+            self.line_br_xy = (self.br_x, 0)
+            self.line_br_uv = (self.br_u, nh)
 
     def add_cropped_img(self, cropped_img, letter_coors, color_pattern):
         self.cropped_img = cropped_img
@@ -3349,8 +3683,9 @@ class Contr:
                 self.core_contour0 = self.core_contours[0]
                 self.core_br = boundingRect(self.core_contour0)
             else:
-                core_preview_png = current_dir / 'core_preview.png'
-                write_pic(core_preview_png, binary)
+                if do_dev_pic:
+                    core_preview_png = debug_dir / f'{media_type}_core_preview.png'
+                    write_pic(core_preview_png, binary)
                 self.core_br = self.br
                 self.core_contour0 = self.contour
         self.core_br_x, self.core_br_y, self.core_br_w, self.core_br_h = self.core_br
@@ -3403,14 +3738,21 @@ class TextWord:
         self.right_bottom = (self.br_u, self.br_v)
         self.br_pts = rect2poly(*self.br)
         self.brp = Polygon(self.br_pts)
-        # ================往右端略微延长================
-        self.ext_br = (self.br_x, self.br_y, self.br_w + self.word_ext_px, self.br_h)
+        if text_direction == 'Horizontal':
+            # ================往右端略微延长================
+            self.ext_br = (self.br_x, self.br_y, self.br_w + self.word_ext_px, self.br_h)
+        else:  # media_type in ['Manga']
+            # ================往下端略微延长================
+            self.ext_br = (self.br_x, self.br_y, self.br_w, self.br_h + self.word_ext_px)
         self.ext_br_pts = rect2poly(*self.ext_br)
         self.ext_brp = Polygon(self.ext_br_pts)
 
     def add_letter_cnt(self, letter_cnt):
         self.letter_cnts.append(letter_cnt)
-        self.letter_cnts.sort(key=lambda x: x.cx + x.cy)
+        if text_direction == 'Horizontal':
+            self.letter_cnts.sort(key=lambda x: x.cx + x.cy)
+        else:  # media_type in ['Manga']
+            self.letter_cnts.sort(key=lambda x: -x.cx + x.cy)
         self.letter_count = len(self.letter_cnts)
         self.calc_brs()
 
@@ -3471,13 +3813,21 @@ class TextLine:
         self.right_bottom = (self.br_u, self.br_v)
         self.br_pts = rect2poly(*self.br)
         self.brp = Polygon(self.br_pts)
-        # ================往右端略微延长================
-        self.ext_br = (self.br_x, self.br_y, self.br_w + self.line_ext_px, self.br_h)
+        if text_direction == 'Horizontal':
+            # ================往右端略微延长================
+            self.ext_br = (self.br_x, self.br_y, self.br_w + self.line_ext_px, self.br_h)
+        else:  # media_type in ['Manga']
+            # ================往下端略微延长================
+            self.ext_br = (self.br_x, self.br_y, self.br_w, self.br_h + self.line_ext_px)
         self.ext_br_pts = rect2poly(*self.ext_br)
         self.ext_brp = Polygon(self.ext_br_pts)
 
     def add_textword(self, textword):
         self.textwords.append(textword)
+        if text_direction == 'Horizontal':
+            self.textwords.sort(key=lambda x: x.br_x + x.br_y)
+        else:  # media_type in ['Manga']
+            self.textwords.sort(key=lambda x: -x.br_x + x.br_y)
         self.textwords.sort(key=lambda x: x.br_x + x.br_y)
         self.letter_count += textword.letter_count
         self.word_count = len(self.textwords)
@@ -3522,11 +3872,21 @@ class iTextBlock:
         self.brp = Polygon(self.br_pts)
 
         # ================柱钩================
-        self.core_br = (
-            self.br_m - block_ratio * self.block_ext_px,
-            self.br_y - self.block_ext_px,
-            2 * block_ratio * self.block_ext_px,
-            self.block_ext_px)
+        if text_direction == 'Horizontal':
+            self.core_br = (
+                self.br_m - block_ratio * self.block_ext_px,
+                self.br_y - self.block_ext_px,
+                2 * block_ratio * self.block_ext_px,
+                self.block_ext_px,
+            )
+        else:  # media_type in ['Manga']
+            self.core_br = (
+                self.br_x - self.block_ext_px,
+                self.br_n - block_ratio * self.block_ext_px,
+                self.block_ext_px,
+                2 * block_ratio * self.block_ext_px,
+            )
+
         self.core_br_pts = rect2poly(*self.core_br)
         self.core_brp = Polygon(self.core_br_pts)
 
@@ -3534,12 +3894,20 @@ class iTextBlock:
         # 根据文本块的所有文本行的外接矩形生成最小包络多边形
         # 先上后下，先左后右的顺序收集所有的外接矩形点
         all_rect_pts = []
-        for textline in self.textlines:
-            all_rect_pts.append((textline.left_top))  # 左上
-            all_rect_pts.append((textline.left_bottom))  # 左下
-        for textline in reversed(self.textlines):
-            all_rect_pts.append((textline.right_bottom))  # 右下
-            all_rect_pts.append((textline.right_top))  # 右上
+        if text_direction == 'Horizontal':
+            for textline in self.textlines:
+                all_rect_pts.append((textline.left_top))  # 左上
+                all_rect_pts.append((textline.left_bottom))  # 左下
+            for textline in reversed(self.textlines):
+                all_rect_pts.append((textline.right_bottom))  # 右下
+                all_rect_pts.append((textline.right_top))  # 右上
+        else:
+            for textline in self.textlines:
+                all_rect_pts.append((textline.right_top))  # 右上
+                all_rect_pts.append((textline.left_top))  # 左上
+            for textline in reversed(self.textlines):
+                all_rect_pts.append((textline.left_bottom))  # 左下
+                all_rect_pts.append((textline.right_bottom))  # 右下
         # 利用所有的外接矩形点构建包络多边形
         self.block_poly = Polygon(all_rect_pts)
         # 直接将这些点转化为OpenCV可以使用的轮廓格式，即(N,1,2)的NumPy数组
@@ -3565,7 +3933,10 @@ class iTextBlock:
 
     def add_textline(self, textline):
         self.textlines.append(textline)
-        self.textlines.sort(key=lambda x: x.br_y)
+        if text_direction == 'Horizontal':
+            self.textlines.sort(key=lambda x: lower_ratio * x.br_x + x.br_y)
+        else:  # media_type in ['Manga']
+            self.textlines.sort(key=lambda x: -x.br_x + lower_ratio * x.br_y)
         # ================处理超大字号================
         if textline.line_ext_px >= 50:
             self.block_ext_px = max(self.block_ext_px, textline.line_ext_px)
@@ -3694,7 +4065,7 @@ class PicGrid:
         self.judgement = None  # 判断结果
 
         # if do_dev_pic:
-        #     frame_mask_grid_png = current_dir / 'frame_mask_grid.png'
+        #     frame_mask_grid_png = debug_dir / f'{media_type}_frame_mask_grid.png'
         #     write_pic(frame_mask_grid_png, self.frame_mask)
 
         # 图片长宽
@@ -3851,7 +4222,7 @@ class ContourOrd(QGraphicsTextItem):
         text_rect = self.boundingRect()
         self.setPos(cnt.cx - text_rect.width() / 2, cnt.cy - text_rect.height() / 2)
         self.setGraphicsEffect(
-            QGraphicsDropShadowEffect(blurRadius=5, xOffset=0, yOffset=0, color=QColor(255, 255, 255, 128)))
+            QGraphicsDropShadowEffect(blurRadius=5, xOffset=0, yOffset=0, color=q_trans_white))
 
     def update_ord(self):
         idx = self.parentItem().mode_indices[self.parent_window.order_mode]
@@ -4098,6 +4469,7 @@ class CustGraphicsScene(QGraphicsScene):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.type = self.__class__.__name__
+        self.parent_window = parent
         self.img_file = None
 
     def load_qimg(self, img_data, img_file=None):
@@ -4136,6 +4508,13 @@ class CustGraphicsScene(QGraphicsScene):
             self.addPixmap(pixmap)
             # 将视图大小设置为 pixmap 的大小，并将图像放入视图中
             self.setSceneRect(pixmap.rect().toRectF())
+
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
+        if event.button() == Qt.MouseButton.RightButton and hasattr(self.parent_window, 'on_create'):
+            x = int(event.scenePos().x())
+            y = int(event.scenePos().y())
+            self.parent_window.on_create(x, y)
+        super().mousePressEvent(event)
 
 
 class CustGraphicsView(QGraphicsView):
@@ -4203,7 +4582,8 @@ class CustGraphicsView(QGraphicsView):
     def mousePressEvent(self, event):
         self.start_pt = event.pos()
         scene_pt = self.mapToScene(self.start_pt)
-        if self.scene().sceneRect().contains(scene_pt) and self.parent_window.order_mode == 'swap':
+        if self.scene().sceneRect().contains(scene_pt) and hasattr(self.parent_window,
+                                                                   'order_mode') and self.parent_window.order_mode == 'swap':
             if event.modifiers() == Qt.ShiftModifier:
                 self.setDragMode(QGraphicsView.RubberBandDrag)
             else:
@@ -4211,7 +4591,8 @@ class CustGraphicsView(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self.parent_window.order_mode == 'swap' and self.dragMode() == QGraphicsView.RubberBandDrag:
+        if hasattr(self.parent_window,
+                   'order_mode') and self.parent_window.order_mode == 'swap' and self.dragMode() == QGraphicsView.RubberBandDrag:
             selected_items = self.scene().selectedItems()
             for item in selected_items:
                 if isinstance(item, ContourPoly):
@@ -4302,11 +4683,11 @@ class OrderWindow(QMainWindow):
                                    trig=self.cgv.cust_zoom_in)
         self.zoom_out_action = iact(self.tr('Zoom Out'), 'ei.zoom-out', QKeySequence.StandardKey.ZoomOut,
                                     trig=self.cgv.cust_zoom_out)
-        self.fit2screen_action = iact(self.tr('Fit to Screen'), 'mdi6.fit-to-screen-outline', "Ctrl+F",
+        self.fit2screen_action = iact(self.tr('Fit to Screen'), 'mdi6.fit-to-screen-outline', "Alt+F",
                                       trig=lambda: self.cgv.fit2view("screen"))
-        self.fit2width_action = iact(self.tr('Fit to Width'), 'ei.resize-horizontal', "Ctrl+W",
+        self.fit2width_action = iact(self.tr('Fit to Width'), 'ei.resize-horizontal', "Alt+W",
                                      trig=lambda: self.cgv.fit2view("width"))
-        self.fit2height_action = iact(self.tr('Fit to Height'), 'ei.resize-vertical', "Ctrl+H",
+        self.fit2height_action = iact(self.tr('Fit to Height'), 'ei.resize-vertical', "Alt+H",
                                       trig=lambda: self.cgv.fit2view("height"))
         self.reset_zoom_action = iact(self.tr('Reset Zoom'), 'mdi6.backup-restore', "Ctrl+0",
                                       trig=lambda: self.cgv.fit2view("original"))
@@ -4635,6 +5016,739 @@ class OrderWindow(QMainWindow):
                 self.status_bar.showMessage("在手动模式下，必须排序所有轮廓才能保存")
 
 
+class ColorTextItemDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def paint(self, painter, option, index):
+        # 设置画笔颜色基于单元格内容
+        text = index.model().data(index, Qt.ItemDataRole.DisplayRole)
+        if text == "G1框内":
+            painter.setPen(QPen(QColor("red")))
+        elif text == "G2框外":
+            painter.setPen(QPen(QColor("blue")))
+        else:
+            painter.setPen(QPen(QColor("black")))  # 默认颜色
+
+        # 绘制文本
+        painter.drawText(option.rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+
+
+class CustTableView(QTableView):
+    def __init__(self, parent=None):
+        super(CustTableView, self).__init__(parent)
+        self.parent = parent
+
+        self.setItemDelegateForColumn(2, ColorTextItemDelegate(self))  # 假设你想在第三列应用颜色
+        # 设置表格为不可编辑状态
+        self.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
+
+        # 设置选择模式和选择行为
+        self.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+
+        # 表格宽度的自适应调整
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        # 水平方向标签拓展剩下的窗口部分，填满表格
+        self.horizontalHeader().setStretchLastSection(True)
+
+        # 自定义右键菜单
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.onContextMenu)
+
+        # self.setDragDropMode(QAbstractItemView.InternalMove)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 设置表格不可更改
+
+        # 水平方向，表格大小拓展到适当的尺寸
+        self.setSelectionMode(QAbstractItemView.SingleSelection)  # 单选
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)  # 单元格选择
+        self.setFrameShape(QFrame.NoFrame)  # 设置无表格的外框
+
+        self.setStyleSheet("""
+        QTableView {
+            selection-background-color: lightblue;
+            selection-color: black;
+        }
+        """)
+
+    def onContextMenu(self, point: QPoint):
+        contextMenu = QMenu(self)
+        contextMenu.addAction(self.parent.group1Action)
+        contextMenu.addAction(self.parent.group2Action)
+        contextMenu.addAction(self.parent.deleteAction)
+        contextMenu.exec(self.mapToGlobal(point))
+
+
+class DraggableGroup(QGraphicsItemGroup):
+    def __init__(self, x, y, id, group, parent=None):
+        super().__init__()
+        # 创建椭圆
+        self.id = int(id)
+        self.group = int(group)
+        diameter = 20
+        dot_color, text_color = get_paint_colors(group)
+        self.ellipse = QGraphicsEllipseItem(x - diameter / 2, y - diameter / 2, diameter, diameter, self)
+        self.ellipse.setBrush(QBrush(dot_color))
+        self.ellipse.setPen(QPen(Qt.NoPen))
+
+        # 创建文本
+        self.text_item = QGraphicsTextItem(str(self.id), self)
+        self.text_item.setDefaultTextColor(text_color)
+        self.text_item.setFont(QFont('Arial', 100, QFont.Weight.Normal))
+        self.text_item.setPos(x, y)  # 相对于组的位置
+
+        # 设置组的拖动属性
+        self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges)
+        # 连接父窗口
+        self.parent = parent
+
+    def change_id(self, id):
+        self.id = id
+        self.text_item.setPlainText(str(self.id))
+
+    def change_group(self, group):
+        self.group = group
+        dot_color, text_color = get_paint_colors(group)
+        self.ellipse.setBrush(QBrush(dot_color))
+        self.text_item.setDefaultTextColor(text_color)
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            # 获取椭圆在场景中的新位置
+            new_scene_pos = self.ellipse.mapToScene(self.ellipse.rect().center())
+            new_x = int(new_scene_pos.x())
+            new_y = int(new_scene_pos.y())
+            # 更新表格坐标
+            # logger.debug(f'{new_x},{new_y}')
+            self.parent.update_coordinates(self, new_x, new_y)
+        return super().itemChange(change, value)
+
+
+class CustTableModel(QStandardItemModel):
+    def __init__(self, rows, columns, parent=None):
+        super().__init__(rows, columns, parent)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole:
+            text = super().data(index, role)
+            if text is not None:
+                return text.replace('\n', ' ')  # 将换行替换为空格用于显示
+        return super().data(index, role)
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if role == Qt.ItemDataRole.EditRole:
+            # 存储原始多行文本
+            return super().setData(index, value, role)
+        return False
+
+    def addData(self, row, column, value):
+        item = QStandardItem(value)
+        self.setItem(row, column, item)
+
+
+class LabelPlusWindow(QMainWindow):
+
+    def __init__(self):
+        super().__init__()
+        self.type = self.__class__.__name__
+        self.a0_para()
+        self.a1_initialize()
+        self.a2_status_bar()
+        self.a3_docks()
+        self.a4_actions()
+        self.a5_menubar()
+        self.a6_toolbar()
+        self.a9_setting()
+
+    def b1_window(self):
+        return
+
+    def a0_para(self):
+        # ================初始化变量================
+        self.screen_icon = qicon('ei.screen')
+        self.setWindowIcon(self.screen_icon)
+        self.cgs = CustGraphicsScene(self)
+        self.cgv = CustGraphicsView(self)
+        self.cgv.setScene(self.cgs)
+        self.cgv.zoomChanged.connect(self.update_zoom_label)
+        self.resize(window_w, window_h)
+
+    def a1_initialize(self):
+        # ================图片列表================
+        self.img_folder = img_folder
+        self.auto_subdir = Auto / self.img_folder.name
+        make_dir(self.auto_subdir)
+        self.img_list = get_valid_imgs(self.img_folder)
+        self.rlp_txt = self.img_folder.parent / f'{self.img_folder.name}翻译_0.txt'
+        self.rlp_para_dic = read_rlp(self.rlp_txt, self.img_list)
+        self.filter_img_list = self.img_list
+        self.img_ind = clamp(img_ind, 0, len(self.img_list) - 1)
+        self.bubble_ellipses = []
+        if self.img_ind < len(self.img_list):
+            self.img_file = self.img_list[self.img_ind]
+            self.setWindowTitle(self.img_file.name)
+        else:
+            self.img_file = None
+
+    def a2_status_bar(self):
+        # ================状态栏================
+        self.status_bar = QStatusBar()
+        # 设置状态栏，类似布局设置
+        self.setStatusBar(self.status_bar)
+
+    def a3_docks(self):
+        self.nav_tab = QTabWidget(self)
+        self.cil = CustImageList(self)
+        self.nav_tab.addTab(self.cil, self.tr('Thumbnails'))
+
+        self.search_line = SearchLine(self)
+
+        # 构建Model/View
+        table_header = [self.tr('ID'), self.tr('Content'), self.tr('Group'), self.tr('Coordinates'), ]
+        self.plus_tv_im = CustTableModel(10, 4, self)  # 数据模型,10行4列
+        self.plus_tv_im.setHorizontalHeaderLabels(table_header)
+        self.plus_tv_sm = QItemSelectionModel(self.plus_tv_im)  # Item选择模型
+        self.plus_tv_sm.selectionChanged.connect(self.update_plus_pte)
+
+        # 设置表格属性
+        self.plus_tv = CustTableView(self)
+        self.plus_tv.setModel(self.plus_tv_im)  # 设置数据模型
+        self.plus_tv.setSelectionModel(self.plus_tv_sm)  # 设置选择模型
+        if hide_extra:
+            self.plus_tv.setColumnHidden(0, True)  # ID
+            self.plus_tv.setColumnHidden(2, True)  # 组别
+            self.plus_tv.setColumnHidden(3, True)  # 坐标
+
+        self.plus_pte = QPlainTextEdit()
+        self.plus_pte.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.plus_pte.setObjectName("plainTextEdit")
+        self.plus_pte.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.plus_pte.textChanged.connect(self.on_text_changed)
+
+        self.pics_widget = QWidget()
+        self.vb_search_nav = QVBoxLayout(self)
+        self.vb_search_nav.addWidget(self.search_line)
+        self.vb_search_nav.addWidget(self.nav_tab)
+        self.pics_widget.setLayout(self.vb_search_nav)
+
+        self.lp_widget = QWidget()
+        self.lp_vb = QVBoxLayout(self)
+        self.lp_vb.addWidget(self.plus_tv)
+        self.lp_vb.addWidget(self.plus_pte)
+        self.lp_widget.setLayout(self.lp_vb)
+
+        self.pics_dock = QDockWidget(self.tr('Image List'), self)
+        self.pics_dock.setObjectName("PicsDock")
+        self.pics_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.pics_dock.setWidget(self.pics_widget)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.pics_dock)
+
+        self.lp_dock = QDockWidget(self.tr('LabelPlus'), self)
+        self.lp_dock.setObjectName("LabelplusDock")
+        self.lp_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.lp_dock.setWidget(self.lp_widget)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.lp_dock)
+
+    def a4_actions(self):
+        self.le_scale_percent = QLineEdit(self)
+        self.le_scale_percent.setFixedWidth(50)
+        self.le_scale_percent.setValidator(QDoubleValidator(1, 1000, 2))
+
+        self.open_folder_action = iact(self.tr('Open Folder'), 'ei.folder', QKeySequence.StandardKey.Open,
+                                       trig=self.open_folder_by_dialog)
+        self.zoom_in_action = iact(self.tr('Zoom In'), 'ei.zoom-in', QKeySequence.StandardKey.ZoomIn,
+                                   trig=self.cgv.cust_zoom_in)
+        self.zoom_out_action = iact(self.tr('Zoom Out'), 'ei.zoom-out', QKeySequence.StandardKey.ZoomOut,
+                                    trig=self.cgv.cust_zoom_out)
+        self.fit2screen_action = iact(self.tr('Fit to Screen'), 'mdi6.fit-to-screen-outline', "Alt+F",
+                                      trig=lambda: self.cgv.fit2view("screen"))
+        self.fit2width_action = iact(self.tr('Fit to Width'), 'ei.resize-horizontal', "Alt+W",
+                                     trig=lambda: self.cgv.fit2view("width"))
+        self.fit2height_action = iact(self.tr('Fit to Height'), 'ei.resize-vertical', "Alt+H",
+                                      trig=lambda: self.cgv.fit2view("height"))
+        self.reset_zoom_action = iact(self.tr('Reset Zoom'), 'mdi6.backup-restore', "Ctrl+0",
+                                      trig=lambda: self.cgv.fit2view("original"))
+        self.prev_img_action = iact(self.tr('Previous Image'), 'ei.arrow-left', "Ctrl+Left",
+                                    trig=lambda: self.nav_img(-1))
+        self.next_img_action = iact(self.tr('Next Image'), 'ei.arrow-right', "Ctrl+Right",
+                                    trig=lambda: self.nav_img(1))
+        self.first_img_action = iact(self.tr('First Image'), 'ei.step-backward', "Ctrl+Home",
+                                     trig=lambda: self.nav_img("first"))
+        self.last_img_action = iact(self.tr('Last Image'), 'ei.step-forward', "Ctrl+End",
+                                    trig=lambda: self.nav_img("last"))
+
+        self.deleteAction = iact(self.tr('Delete'), 'ri.delete-bin-7-line', QKeySequence.StandardKey.Delete,
+                                 trig=self.on_delete)
+        self.group1Action = iact(self.tr('Inside'), 'ph.number-circle-one-fill', "Ctrl+1",
+                                 trig=partial(self.on_group, 1))
+        self.group2Action = iact(self.tr('Outside'), 'ph.number-circle-two-fill', "Ctrl+2",
+                                 trig=partial(self.on_group, 2))
+        self.up_action = iact(self.tr('Up'), 'ei.chevron-up', "Ctrl+Up", trig=partial(self.on_move, -1))
+        self.down_action = iact(self.tr('Down'), 'ei.chevron-down', "Ctrl+Down", trig=partial(self.on_move, 1))
+        self.top_action = iact(self.tr('Top'), 'mdi.arrow-collapse-up', "Alt+Up", trig=partial(self.on_move, '1'))
+        self.bottom_action = iact(self.tr('Bottom'), 'mdi.arrow-collapse-down', "Alt+Down",
+                                  trig=partial(self.on_move, '-1'))
+        self.undo_action = iact(self.tr('Undo'), 'fa5s.undo', QKeySequence.StandardKey.Undo, trig=self.undo)
+        self.redo_action = iact(self.tr('Redo'), 'fa5s.redo', QKeySequence.StandardKey.Redo, trig=self.redo)
+        self.save_action = iact(self.tr('Save'), 'msc.save', QKeySequence.StandardKey.Save, trig=self.save2lp)
+
+        self.undo_action.setEnabled(False)
+        self.redo_action.setEnabled(False)
+
+        self.le_scale_percent.editingFinished.connect(self.scale_by_percent)
+        self.update_zoom_label()
+
+    def a5_menubar(self):
+        # 文件菜单
+        self.file_menu = self.menuBar().addMenu(self.tr('File'))
+        self.file_menu.addAction(self.open_folder_action)
+
+        # 显示菜单
+        self.view_menu = self.menuBar().addMenu(self.tr('View'))
+        # 视图菜单选项
+        self.view_menu.addAction(self.pics_dock.toggleViewAction())
+        self.view_menu.addSeparator()
+        # 缩放选项
+        self.view_menu.addAction(self.zoom_in_action)
+        self.view_menu.addAction(self.zoom_out_action)
+        self.view_menu.addAction(self.fit2screen_action)
+        self.view_menu.addAction(self.fit2width_action)
+        self.view_menu.addAction(self.fit2height_action)
+        self.view_menu.addAction(self.reset_zoom_action)
+        self.view_menu.addSeparator()
+
+        # 显示选项
+        self.display_modes = [(self.tr('Show Thumbnails'), 0),
+                              (self.tr('Show Filenames'), 1),
+                              (self.tr('Show Both'), 2)]
+        self.display_mode_group = QActionGroup(self)
+        for display_mode in self.display_modes:
+            action = QAction(display_mode[0], self, checkable=True)
+            action.triggered.connect(lambda _, dmode=display_mode[1]: self.cil.set_display_mode(dmode))
+            self.view_menu.addAction(action)
+            self.display_mode_group.addAction(action)
+
+        # 默认选中 Show Both 选项
+        self.display_mode_group.actions()[2].setChecked(True)
+
+        # 导航菜单
+        self.nav_menu = self.menuBar().addMenu(self.tr('Navigate'))
+        self.nav_menu.addAction(self.prev_img_action)
+        self.nav_menu.addAction(self.next_img_action)
+        self.nav_menu.addAction(self.first_img_action)
+        self.nav_menu.addAction(self.last_img_action)
+
+        # 编辑菜单
+        self.edit_menu = self.menuBar().addMenu(self.tr('Edit'))
+        self.edit_menu.addAction(self.deleteAction)
+        self.edit_menu.addAction(self.group1Action)
+        self.edit_menu.addAction(self.group2Action)
+        self.edit_menu.addAction(self.up_action)
+        self.edit_menu.addAction(self.down_action)
+        self.edit_menu.addAction(self.top_action)
+        self.edit_menu.addAction(self.bottom_action)
+        self.edit_menu.addAction(self.undo_action)
+        self.edit_menu.addAction(self.redo_action)
+
+    def a6_toolbar(self):
+        self.tool_bar = QToolBar(self)
+        self.tool_bar.setObjectName("Toolbar")
+        self.tool_bar.setIconSize(QSize(24, 24))
+        self.tool_bar.setMovable(False)
+        self.tool_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        self.addToolBar(self.tool_bar)
+        self.tool_bar.addAction(self.open_folder_action)
+        self.tool_bar.addSeparator()
+        self.tool_bar.addAction(self.zoom_in_action)
+        self.tool_bar.addAction(self.zoom_out_action)
+        self.tool_bar.addAction(self.fit2screen_action)
+        self.tool_bar.addAction(self.fit2width_action)
+        self.tool_bar.addAction(self.fit2height_action)
+        self.tool_bar.addAction(self.reset_zoom_action)
+        self.tool_bar.addSeparator()
+        self.tool_bar.addAction(self.first_img_action)
+        self.tool_bar.addAction(self.prev_img_action)
+        self.tool_bar.addAction(self.next_img_action)
+        self.tool_bar.addAction(self.last_img_action)
+        self.tool_bar.addSeparator()
+        self.tool_bar.addAction(self.deleteAction)
+        self.tool_bar.addAction(self.group1Action)
+        self.tool_bar.addAction(self.group2Action)
+        self.tool_bar.addAction(self.up_action)
+        self.tool_bar.addAction(self.down_action)
+        self.tool_bar.addAction(self.top_action)
+        self.tool_bar.addAction(self.bottom_action)
+        self.tool_bar.addAction(self.undo_action)
+        self.tool_bar.addAction(self.redo_action)
+        self.tool_bar.addAction(self.save_action)
+        self.tool_bar.addSeparator()
+        self.tool_bar.addWidget(self.le_scale_percent)
+        self.tool_bar.addWidget(QLabel('%'))
+
+    def a9_setting(self):
+        self.open_img_by_path(self.img_file)
+        self.setCentralWidget(self.cgv)
+        self.show()
+
+    def loop_time(self, leng):
+        loop = QEventLoop()
+        QTimer.singleShot(leng, loop.quit)
+        loop.exec_()
+
+    def open_img_by_path(self, img_file):
+        if img_file is not None:
+            img_file = Path(img_file)
+            if img_file.exists() and img_file != self.cgs.img_file:
+                self.img_file = img_file
+                self.formatted_stem = get_formatted_stem(self.img_file)
+                self.img_file_size = getsize(self.img_file)
+                self.img_ind = self.img_list.index(self.img_file)
+                self.setWindowTitle(self.img_file.name)
+                # ================显示图片================
+                self.img_raw = imdecode(fromfile(self.img_file, dtype=uint8), -1)
+                self.ih, self.iw = self.img_raw.shape[0:2]
+                self.cgs.load_qimg(self.img_raw, self.img_file)
+                self.scale_by_percent()
+                self.update_zoom_label()
+                # ================将当前图片项设为选中状态================
+                self.cil.blockSignals(True)  # 阻止信号
+                self.cil.setCurrentRow(self.img_ind)
+                self.cil.blockSignals(False)  # 恢复信号
+                # ================更新状态栏信息================
+                index_str = f'{self.img_ind + 1}/{len(self.img_list)}'
+                meta_str = f'{self.tr("Width")}: {self.iw} {self.tr("Height")}: {self.ih} | {self.tr("File Size")}: {self.img_file_size} bytes'
+                status_text = f'{index_str} | {self.tr("Filnename")}: {self.img_file.name} | {meta_str}'
+                self.status_bar.showMessage(status_text)
+                QApplication.processEvents()
+                self.open_lp_bubbles()
+        QApplication.processEvents()
+
+    def open_lp_bubbles(self):
+        self.undo_stack = []
+        self.redo_stack = []
+        self.bubble_ellipses.clear()
+        rlp_pic_bubbles = self.rlp_para_dic.get(self.formatted_stem, [])
+        # ================设置表格行数================
+        self.plus_tv_im.setRowCount(len(rlp_pic_bubbles))
+        for r in range(len(rlp_pic_bubbles)):
+            # ================针对每一个气泡================
+            rlp_pic_bubble = rlp_pic_bubbles[r]
+            id = rlp_pic_bubble['id']
+            coor_x = rlp_pic_bubble['coor_x']
+            coor_y = rlp_pic_bubble['coor_y']
+            group = rlp_pic_bubble['group']
+            content = rlp_pic_bubble['content']
+            x = int(self.iw * coor_x)
+            y = int(self.ih * coor_y)
+            pt_xy = (x, y)
+            group_str = ''
+            if group == 1:
+                group_str = 'G1框内'
+            elif group == 2:
+                group_str = 'G2框外'
+
+            # 创建一个可拖动的组
+            bubble_ellipse = DraggableGroup(x, y, id, group, self)
+            self.bubble_ellipses.append(bubble_ellipse)
+
+            item0 = QStandardItem(str(id))
+            item1 = QStandardItem(content)
+            item2 = QStandardItem(group_str)
+            item3 = QStandardItem(f'{x},{y}')
+            self.plus_tv_im.setItem(r, 0, item0)
+            self.plus_tv_im.setItem(r, 1, item1)
+            self.plus_tv_im.setItem(r, 2, item2)
+            self.plus_tv_im.setItem(r, 3, item3)
+
+        for idx, bubble_ellipse in enumerate(self.bubble_ellipses):
+            self.cgs.addItem(bubble_ellipse)
+
+        # 检查是否有行已经被选中
+        if not self.plus_tv.selectionModel().hasSelection() and len(rlp_pic_bubbles) > 0:
+            # 选中第一行
+            self.plus_tv.selectRow(0)
+
+        self.update_plus_pte()
+
+    @logger.catch
+    def update_coordinates(self, item, x, y):
+        # 更新表格中的坐标信息
+        row_id = item.id - 1
+        item3 = QStandardItem(f'{x},{y}')
+        self.plus_tv_im.setItem(row_id, 3, item3)
+
+    def update_plus_pte(self):
+        current_index = self.plus_tv_sm.currentIndex()
+        if current_index.isValid():
+            row = current_index.row()
+            cell = self.plus_tv_im.item(row, 1)
+            if cell:
+                content = cell.text()
+                self.plus_pte.setPlainText(content)
+            else:
+                self.plus_pte.setPlainText('')
+        else:
+            self.plus_pte.setPlainText('')
+
+    def on_text_changed(self):
+        text = self.plus_pte.toPlainText()
+        current_index = self.plus_tv.currentIndex()
+        if not current_index.isValid():
+            return
+        row = current_index.row()
+        self.plus_tv_im.setItem(row, 1, QStandardItem(text))
+
+    def on_delete(self):
+        if self.plus_tv.selectionModel().hasSelection():
+            selectedRow = self.plus_tv.selectionModel().selectedRows()[0]
+            index = selectedRow.row()
+            # logger.debug(f'{index=}')
+            for i in range(index + 1, len(self.bubble_ellipses)):
+                # logger.debug(f'{i=}')
+                bubble_ellipse = self.bubble_ellipses[i]
+                old_id = bubble_ellipse.id
+                new_id = old_id - 1
+                bubble_ellipse.change_id(new_id)
+                # logger.debug(f'{old_id=}, {new_id=}')
+                item = self.plus_tv_im.item(i, 0)  # ID column
+                item.setText(str(new_id))
+            # 删除场景中对应的气泡
+            bubble_ellipse = self.bubble_ellipses.pop(index)
+            self.cgs.removeItem(bubble_ellipse)
+            self.plus_tv_im.removeRow(index)
+
+            # 选择新行
+            new_index = min(index, self.plus_tv_im.rowCount() - 1)
+            if new_index >= 0:
+                self.plus_tv.selectRow(new_index)
+
+    def on_move(self, move_num):
+        current_index = self.plus_tv.currentIndex()
+        if not current_index.isValid():
+            return
+
+        row = current_index.row()
+        if isinstance(move_num, str):
+            if move_num == '1':
+                # 移到开头
+                target_row = 0
+            else:  # move_num == '-1'
+                # 移到结尾
+                target_row = self.plus_tv_im.rowCount() - 1
+            items = [self.plus_tv_im.takeItem(row, col) for col in range(self.plus_tv_im.columnCount())]
+            self.plus_tv_im.removeRow(row)
+            self.plus_tv_im.insertRow(target_row, items)
+
+            # 移动气泡并更新ID
+            bubble_to_move = self.bubble_ellipses.pop(row)
+            self.bubble_ellipses.insert(target_row, bubble_to_move)
+            # 更新所有行的ID和气泡ID
+            for idx, bubble in enumerate(self.bubble_ellipses):
+                bubble.change_id(idx + 1)
+                item0 = QStandardItem(str(idx + 1))
+                self.plus_tv_im.setItem(idx, 0, item0)
+        else:
+            target_row = row + move_num
+            if 0 <= target_row < self.plus_tv_im.rowCount():
+                items = [self.plus_tv_im.takeItem(row, col) for col in range(self.plus_tv_im.columnCount())]
+                self.plus_tv_im.removeRow(row)
+                self.plus_tv_im.insertRow(target_row, items)
+
+                src_bubble_ellipse = self.bubble_ellipses[row]
+                dst_bubble_ellipse = self.bubble_ellipses[target_row]
+
+                item0 = QStandardItem(str(row + 1))
+                target_item0 = QStandardItem(str(target_row + 1))
+                self.plus_tv_im.setItem(row, 0, item0)
+                self.plus_tv_im.setItem(target_row, 0, target_item0)
+
+                src_bubble_ellipse.change_id(target_row + 1)
+                dst_bubble_ellipse.change_id(row + 1)
+
+                # 交换
+                self.bubble_ellipses[row], self.bubble_ellipses[target_row] = self.bubble_ellipses[target_row], \
+                    self.bubble_ellipses[row]
+
+        # 更新选中
+        self.plus_tv.selectRow(target_row)
+
+    def on_create(self, x, y):
+        new_id = len(self.bubble_ellipses) + 1
+        new_bubble = DraggableGroup(x, y, new_id, 1, self)
+        self.cgs.addItem(new_bubble)
+        self.bubble_ellipses.append(new_bubble)
+
+        row = self.plus_tv_im.rowCount()
+        self.plus_tv_im.insertRow(row)
+
+        item0 = QStandardItem(str(new_id))
+        item1 = QStandardItem('')
+        item2 = QStandardItem('G1框内')
+        item3 = QStandardItem(f'{x},{y}')
+        self.plus_tv_im.setItem(row, 0, item0)
+        self.plus_tv_im.setItem(row, 1, item1)
+        self.plus_tv_im.setItem(row, 2, item2)
+        self.plus_tv_im.setItem(row, 3, item3)
+
+        # 选择新行
+        self.plus_tv.selectRow(self.plus_tv_im.rowCount() - 1)
+
+    def on_group(self, group):
+        current_index = self.plus_tv.currentIndex()
+        if not current_index.isValid():
+            return
+
+        row = current_index.row()
+        if group == 1:
+            group_str = 'G1框内'
+        elif group == 2:
+            group_str = 'G2框外'
+        else:
+            group_str = ''
+        item2 = QStandardItem(group_str)
+        self.plus_tv_im.setItem(row, 2, item2)
+        bubble_ellipse = self.bubble_ellipses[row]
+        bubble_ellipse.change_group(group)
+
+    def open_folder_by_path(self, folder_path):
+        # 判断文件夹路径是否存在
+        folder_path = Path(folder_path)
+        if folder_path.exists():
+            # 获取所有图片文件的路径
+            img_list = get_valid_imgs(folder_path)
+            if img_list and folder_path != self.img_folder:
+                self.img_folder = folder_path
+                self.auto_subdir = Auto / self.img_folder.name
+                make_dir(self.auto_subdir)
+                self.img_list = img_list
+                self.all_masks = get_valid_imgs(self.img_folder, vmode='mask')
+                self.filter_img_list = self.img_list
+                self.img_ind = 0
+                self.img_file = self.img_list[self.img_ind]
+                # ================更新导航栏中的图片列表================
+                self.cil.load_img_list()
+                self.open_img_by_path(self.img_file)
+
+    def open_folder_by_dialog(self):
+        # 如果self.img_folder已经设置，使用其上一级目录作为起始目录，否则使用当前目录
+        self.img_folder = Path(self.img_folder) if self.img_folder else None
+        start_directory = self.img_folder.parent.as_posix() if self.img_folder else "."
+        img_folder = QFileDialog.getExistingDirectory(self, self.tr('Open Folder'), start_directory)
+        if img_folder:
+            self.open_folder_by_path(img_folder)
+
+    def nav_img(self, nav_step):
+        cur_img_path = self.img_list[self.img_ind]
+        # 检查当前图片路径是否在过滤后的图片列表中
+        if cur_img_path not in self.filter_img_list:
+            return
+        cur_filter_ind = self.filter_img_list.index(cur_img_path)
+        if nav_step == "first":
+            new_filter_ind = 0
+        elif nav_step == "last":
+            new_filter_ind = len(self.filter_img_list) - 1
+        else:
+            new_filter_ind = cur_filter_ind + nav_step
+        if 0 <= new_filter_ind < len(self.filter_img_list):
+            new_img_file = self.filter_img_list[new_filter_ind]
+            self.open_img_by_path(new_img_file)
+
+    def filter_imgs(self, search_text: str):
+        # 获取搜索框的三个条件：是否区分大小写、是否全词匹配、是否使用正则表达式
+        case_sensitive = self.search_line.case_sensitive_button.isChecked()
+        whole_word = self.search_line.whole_word_button.isChecked()
+        use_regex = self.search_line.regex_button.isChecked()
+
+        # 获取对应的正则表达式模式对象
+        regex = get_search_regex(search_text, case_sensitive, whole_word, use_regex)
+        if not regex:
+            return
+
+        # 根据正则表达式筛选图片列表
+        self.filter_img_list = [img_file for img_file in self.img_list if regex.search(img_file.name)]
+
+        # 更新缩略图列表：如果图片名匹配正则表达式，显示该项，否则隐藏
+        for index in range(self.cil.count()):
+            item = self.cil.item(index)
+            item_text = item.text()
+            item.setHidden(not bool(regex.search(item_text)))
+
+    def update_zoom_label(self):
+        self.le_scale_percent.setText(f'{self.cgv.zoom_level * 100:.2f}')
+
+    def scale_by_percent(self):
+        target_scale = float(self.le_scale_percent.text()) / 100
+        current_scale = self.cgv.transform().m11()
+        scale_factor = target_scale / current_scale
+        self.cgv.scale(scale_factor, scale_factor)
+
+    def undo(self):
+        if not self.undo_stack:
+            return
+
+        self.undo_action.setEnabled(len(self.undo_stack) > 0)
+        self.redo_action.setEnabled(True)
+
+    def redo(self):
+        if not self.redo_stack:
+            return
+
+        self.redo_action.setEnabled(len(self.redo_stack) > 0)
+        self.undo_action.setEnabled(True)
+
+    def get_table_data(self):
+        data_list = []
+        for row in range(self.plus_tv_im.rowCount()):
+            row_data = []
+            for col in range(self.plus_tv_im.columnCount()):
+                item = self.plus_tv_im.item(row, col)
+                if item is not None:
+                    row_data.append(item.text())
+                else:
+                    row_data.append("")  # 如果某个单元格没有数据，则添加空字符串
+            data_list.append(row_data)
+        return data_list
+
+    def save2lp(self):
+        self.formatted_stem = get_formatted_stem(self.img_file)
+        table_data = self.get_table_data()
+        if print_type == 'pprint':
+            pprint(table_data)
+        else:
+            table = PrettyTable()
+            # 设置表格的标题
+            table.field_names = [self.tr('ID'), self.tr('Content'), self.tr('Group'), self.tr('Coordinates'), ]
+            # 添加数据到表格
+            for t in range(len(table_data)):
+                row_data = table_data[t]
+                table.add_row(row_data)
+            # 打印表格
+            print(table)
+
+        rlp_pic_bubbles = []
+        for t in range(len(table_data)):
+            row_data = table_data[t]
+            id, content, group_str, coor_str = row_data
+            if group_str == 'G1框内':
+                group = 1
+            elif group_str == 'G2框外':
+                group = 2
+            else:
+                group = 1
+            x_str, par, y_str = coor_str.partition(',')
+            coor_x = int(x_str) / self.iw
+            coor_y = int(y_str) / self.ih
+            rlp_pic_bubble = {}
+            rlp_pic_bubble['id'] = id
+            rlp_pic_bubble['coor_x'] = coor_x
+            rlp_pic_bubble['coor_y'] = coor_y
+            rlp_pic_bubble['group'] = group
+            rlp_pic_bubble['content'] = content
+            rlp_pic_bubbles.append(rlp_pic_bubble)
+        self.rlp_para_dic[self.formatted_stem] = rlp_pic_bubbles
+        save_rlp(self.rlp_txt, self.rlp_para_dic, self.img_list)
+
+
 class MistWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -4852,11 +5966,11 @@ class MistWindow(QMainWindow):
                                    trig=self.cgv.cust_zoom_in)
         self.zoom_out_action = iact(self.tr('Zoom Out'), 'ei.zoom-out', QKeySequence.StandardKey.ZoomOut,
                                     trig=self.cgv.cust_zoom_out)
-        self.fit2screen_action = iact(self.tr('Fit to Screen'), 'mdi6.fit-to-screen-outline', "Ctrl+F",
+        self.fit2screen_action = iact(self.tr('Fit to Screen'), 'mdi6.fit-to-screen-outline', "Alt+F",
                                       trig=lambda: self.cgv.fit2view("screen"))
-        self.fit2width_action = iact(self.tr('Fit to Width'), 'ei.resize-horizontal', "Ctrl+W",
+        self.fit2width_action = iact(self.tr('Fit to Width'), 'ei.resize-horizontal', "Alt+W",
                                      trig=lambda: self.cgv.fit2view("width"))
-        self.fit2height_action = iact(self.tr('Fit to Height'), 'ei.resize-vertical', "Ctrl+H",
+        self.fit2height_action = iact(self.tr('Fit to Height'), 'ei.resize-vertical', "Alt+H",
                                       trig=lambda: self.cgv.fit2view("height"))
         self.reset_zoom_action = iact(self.tr('Reset Zoom'), 'mdi6.backup-restore', "Ctrl+0",
                                       trig=lambda: self.cgv.fit2view("original"))
@@ -5284,7 +6398,8 @@ class MistWindow(QMainWindow):
             img_file = self.img_list[i]
             logger.warning(f'{img_file=}')
             pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
-            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, self.img_folder, i, self.img_list)
+            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, self.img_folder, i, self.img_list,
+                                                       media_type)
 
             self.pb_task.setValue(int(processed_imgs / len(self.img_list) * 100))
             QApplication.processEvents()
@@ -5358,6 +6473,12 @@ class MistWindow(QMainWindow):
 @logger.catch
 def order_qt(appgui):
     order_window = OrderWindow()
+    sys.exit(appgui.exec())
+
+
+@logger.catch
+def lp_qt(appgui):
+    lp_window = LabelPlusWindow()
     sys.exit(appgui.exec())
 
 
@@ -5596,6 +6717,7 @@ def get_proj_img(img_array, direction, target_color="black"):
 # @logger.catch
 def analyze1frame(img_file, frame_data, auto_subdir, media_type):
     with_frames_jpg = img_file.parent / f'{img_file.stem}-画框.jpg'
+    pic_div_psd = img_folder / f'{img_file.stem}-分框.psd'
     added_frames_jpg = auto_subdir / f'{img_file.stem}-加框.jpg'
     logger.warning(f'{img_file=}')
     img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
@@ -5607,6 +6729,8 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
     color_name0 = 'white'
     if img_file.name in frame_data:
         frame_grid_strs = frame_data[img_file.name]
+    elif pic_div_psd.exists():
+        frame_grid_strs = []
     else:
         if frame_color is None:
             # 获取RGBA格式的边框像素
@@ -5663,11 +6787,11 @@ def analyze1frame(img_file, frame_data, auto_subdir, media_type):
             logger.info(f'{high_diff_maxima=}')
 
         if do_dev_pic:
-            frame_mask_png = current_dir / 'frame_mask.png'
-            frame_mask_white_png = current_dir / 'frame_mask_white.png'
-            frame_mask_black_png = current_dir / 'frame_mask_black.png'
-            hori_proj_frame_mask_png = current_dir / 'hori_proj_bi.png'
-            ver_proj_frame_mask_png = current_dir / 'ver_proj_bi.png'
+            frame_mask_png = debug_dir / f'{media_type}_frame_mask.png'
+            frame_mask_white_png = debug_dir / f'{media_type}_frame_mask_white.png'
+            frame_mask_black_png = debug_dir / f'{media_type}_frame_mask_black.png'
+            hori_proj_frame_mask_png = debug_dir / f'{media_type}_hori_proj_bi.png'
+            ver_proj_frame_mask_png = debug_dir / f'{media_type}_ver_proj_bi.png'
             write_pic(frame_mask_png, frame_mask)
             write_pic(frame_mask_white_png, frame_mask_white)
             write_pic(frame_mask_black_png, frame_mask_black)
@@ -5768,7 +6892,7 @@ def water_seg(filled_contour, textblocks):
         color_labels[labels == label] = color
 
     if do_dev_pic:
-        color_labels_png = current_dir / 'color_labels.png'
+        color_labels_png = debug_dir / f'{media_type}_color_labels.png'
         write_pic(color_labels_png, color_labels)
 
     seg_cnts = []
@@ -5776,7 +6900,7 @@ def water_seg(filled_contour, textblocks):
         target_label = unique_labels[u]
         binary_img = zeros_like(labels, dtype=uint8)
         binary_img[labels == target_label] = 255
-        # binary_img_path = current_dir / f'binary_img{u}.png'
+        # binary_img_path = debug_dir / f'binary_img{u}.png'
         # write_pic(binary_img_path, binary_img)
 
         # 查找轮廓
@@ -5803,17 +6927,22 @@ def get_textwords(letter_cnts, letter_in_contour, kernal_word, cnt_ind):
     # ================单词================
     textwords = []
     letter_cnts4words = deepcopy(letter_cnts)
-    # 从左到右，然后从上到下
-    letter_cnts4words.sort(key=lambda x: (x.br_x, x.br_y))
+
+    if text_direction == 'Horizontal':
+        # 从左到右，然后从上到下
+        letter_cnts4words.sort(key=lambda x: (x.br_x, x.br_y))
+    else:  # media_type in ['Manga']
+        # 从上到下，然后从右到左
+        letter_cnts4words.sort(key=lambda x: (x.br_y, -x.br_x))
     if use_dilate:
         # ================通过膨胀查找单词================
         word_in_contour = dilate(letter_in_contour, kernal_word, iterations=1)
         word_contours, word_hier = findContours(word_in_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
         if do_dev_pic:
             if cnt_ind is not None:
-                word_in_contour_png = current_dir / f'letter_in_contour_{cnt_ind}_dilated.png'
+                word_in_contour_png = debug_dir / f'letter_in_contour_{cnt_ind}_dilated.png'
             else:
-                word_in_contour_png = current_dir / f'letter_in_contour_dilated.png'
+                word_in_contour_png = debug_dir / f'letter_in_contour_dilated.png'
             write_pic(word_in_contour_png, word_in_contour)
         word_cnts = []
         for w in range(len(word_contours)):
@@ -5846,9 +6975,12 @@ def get_textwords(letter_cnts, letter_in_contour, kernal_word, cnt_ind):
                 old_textword = deepcopy(textword)
                 for letter in letter_cnts4words[:]:
                     # 检查单字的质心和单词的中心点的高度差异是否在允许的范围内
-                    cheight_diff = abs(letter.cy - textword.br_center[1])
+                    if text_direction == 'Horizontal':
+                        c_height_diff = abs(letter.cy - textword.br_center[1])
+                    else:  # media_type in ['Manga']
+                        c_height_diff = abs(letter.cx - textword.br_center[0])
                     # 如果高度差异在允许的范围内且单词和文本行的轮廓有交集
-                    if cheight_diff <= max_hdiff and textword.ext_brp.intersects(letter.brp):
+                    if c_height_diff <= max_hdiff and textword.ext_brp.intersects(letter.brp):
                         # 则认为单词属于这个文本行
                         textword.add_letter_cnt(letter)
                         letter_cnts4words.remove(letter)
@@ -5860,7 +6992,7 @@ def get_textwords(letter_cnts, letter_in_contour, kernal_word, cnt_ind):
             if textword.letter_area <= letter_area_max:
                 textwords.append(textword)
         # ================字母i最上方的点可能被孤立================
-        if check_dots:
+        if media_type in ['Comic'] and check_dots:
             dots = [x for x in textwords if x.br_area <= 30 and len(x.letter_cnts) == 1]
             not_dots = [x for x in textwords if x not in dots]
             for d in range(len(dots)):
@@ -5892,8 +7024,12 @@ def get_textlines(textwords):
     # ================文本行================
     textlines = []
     textwords4lines = deepcopy(textwords)
-    # 从左到右，然后从上到下
-    textwords4lines.sort(key=lambda x: (x.br_x, x.br_y))
+    if text_direction == 'Horizontal':
+        # 从左到右，然后从上到下
+        textwords4lines.sort(key=lambda x: (x.br_x, x.br_y))
+    else:  # media_type in ['Manga']
+        # 从上到下，然后从右到左
+        textwords4lines.sort(key=lambda x: (x.br_y, -x.br_x))
     while textwords4lines:
         # 取最左边的单词，逐词往右查找
         textword = textwords4lines[0]
@@ -5904,9 +7040,12 @@ def get_textlines(textwords):
             old_textline = deepcopy(textline)
             for textword in textwords4lines[:]:
                 # 检查单词的质心和文本行的中心点的高度差异是否在允许的范围内
-                cheight_diff = abs(textword.br_center[1] - textline.br_center[1])
+                if text_direction == 'Horizontal':
+                    c_height_diff = abs(textword.br_center[1] - textword.br_center[1])
+                else:  # media_type in ['Manga']
+                    c_height_diff = abs(textword.br_center[0] - textword.br_center[0])
                 # 如果高度差异在允许的范围内且单词和文本行的轮廓有交集
-                if cheight_diff <= max_hdiff and textline.ext_brp.intersects(textword.brp):
+                if c_height_diff <= max_hdiff and textline.ext_brp.intersects(textword.brp):
                     # 则认为单词属于这个文本行
                     textline.add_textword(textword)
                     textwords4lines.remove(textword)
@@ -5925,11 +7064,20 @@ def get_textblocks(textlines, cnt_ind, color_input, ih, iw):
     # ================根据文本行检测文本块================
     textblocks_raw = []
     textlines4blocks = deepcopy(textlines)
-    # 从上到下然后从左到右排序
-    textlines4blocks.sort(key=lambda x: (x.br_y, x.br_x))
+
+    if text_direction == 'Horizontal':
+        # 从上到下，然后从左到右
+        textlines4blocks.sort(key=lambda x: (x.br_y, x.br_x))
+    else:  # media_type in ['Manga']
+        # 从右到左，然后从上到下
+        textlines4blocks.sort(key=lambda x: (-x.br_x, x.br_y))
     while textlines4blocks:
-        # 取最下方的文本行，逐行往上查找
-        textline = textlines4blocks[-1]
+        if text_direction == 'Horizontal':
+            # 取最下方的文本行，逐行往上查找
+            textline = textlines4blocks[-1]
+        else:  # media_type in ['Manga']
+            # 取最右方的文本行，逐行往左查找
+            textline = textlines4blocks[0]
         textlines4blocks.remove(textline)
         textblock = iTextBlock(textline, media_type)
         while True:
@@ -5946,7 +7094,7 @@ def get_textblocks(textlines, cnt_ind, color_input, ih, iw):
     textblocks.sort(key=lambda x: x.br_y + x.br_x)
 
     # ================检查底行================
-    if check_bottom and len(textblocks) >= 2:
+    if text_direction == 'Horizontal' and check_bottom and len(textblocks) >= 2:
         textblocks.sort(key=lambda x: x.br_y)
         # ================底行文本块================
         bottom_textblock = textblocks[-1]
@@ -6005,7 +7153,7 @@ def get_textblocks(textlines, cnt_ind, color_input, ih, iw):
                         textblock_h_percent_min * ih <= x.br_y <= x.br_v <= textblock_h_percent_max * ih]
     if textblocks_valid:
         textblocks = textblocks_valid
-    logger.warning(f'{len(textblocks_raw)}->{len(filter_textblocks)}->{len(textblocks)}')
+    logger.warning(f'{len(textblocks_raw)}=>{len(filter_textblocks)}=>{len(textblocks)}')
 
     # textblocks = textblocks_raw
 
@@ -6018,11 +7166,11 @@ def get_textblocks(textlines, cnt_ind, color_input, ih, iw):
     # ================其他排序================
     if sort_by_y:
         if len(textblocks) in [3, 4, 5]:
-            textblocks.sort(key=lambda x: x.br_y + 0.2 * x.br_x)
+            textblocks.sort(key=lambda x: x.br_y + lower_ratio * x.br_x)
             # textblocks.sort(key=lambda x: x.br_y)
     if sort_by_x:
         if len(textblocks) in [3, 4, 5]:
-            textblocks.sort(key=lambda x: 0.2 * x.br_y + x.br_x)
+            textblocks.sort(key=lambda x: lower_ratio * x.br_y + x.br_x)
             # textblocks.sort(key=lambda x: x.br_x)
     logger.debug(f'{len(textblocks)=}')
     return textblocks
@@ -6046,7 +7194,7 @@ def get_textblocks_full(letter_in_contour, media_type, cnt_ind=None):
         # 反色
         letter_in_contour = bitwise_not(letter_in_contour)
 
-    if media_type == 'Comic':
+    if text_direction == 'Horizontal':
         kh = 1
         kw = kernel_depth
     else:
@@ -6220,8 +7368,9 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, cnt_in
         if outline_pt1 is None or outline_pt2 is None:
             img = filled_contour.copy()
             blended_img = get_textblock_bubbles(img, textblocks)
-            check_pts_png = current_dir / 'check_pts.png'
-            write_pic(check_pts_png, blended_img)
+            if do_dev_pic:
+                check_pts_png = debug_dir / f'{media_type}_check_pts.png'
+                write_pic(check_pts_png, blended_img)
         if outline_pt1 is None and outline_pt2 is None:
             pt_center = None
         elif outline_pt1 is None:
@@ -6338,8 +7487,9 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, cnt_in
             error_preview = circle(error_preview, pt2tup(pt_center), 3, color_yellow, -1)
             error_preview = circle(error_preview, pt2tup(cur_pt_center), 3, color_blue, -1)
             # 保存示意图
-            error_preview_png = current_dir / 'error_preview.png'
-            write_pic(error_preview_png, error_preview)
+            if do_dev_pic:
+                error_preview_png = debug_dir / f'{media_type}_error_preview.png'
+                write_pic(error_preview_png, error_preview)
             logger.debug(f'{cur_pt_center=}, {outline_pt1=}, {outline_pt2=}')
 
     contours, _ = findContours(filled_contour_split, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
@@ -6347,8 +7497,8 @@ def pivot_proc(filter_cnt, filled_contour, letter_in_contour, textblocks, cnt_in
     seg_cnts = get_full_scnts(seg_cnts, filled_contour, filled_contour_split)
 
     if do_dev_pic:
-        split_preview_png = current_dir / f'split_preview_{cnt_ind}.png'
-        filled_contour_split_png = current_dir / 'filled_contour_split.png'
+        split_preview_png = debug_dir / f'split_preview_{cnt_ind}.png'
+        filled_contour_split_png = debug_dir / f'{media_type}_filled_contour_split.png'
         write_pic(split_preview_png, split_preview)
         write_pic(filled_contour_split_png, filled_contour_split)
     return seg_cnts, True
@@ -6421,7 +7571,7 @@ def seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type):
                     filled_contour[dilated_mask == 255] = 0
 
             if do_dev_pic:
-                filled_contour_preview_png = current_dir / 'filled_contour_preview.png'
+                filled_contour_preview_png = debug_dir / f'{media_type}_filled_contour_preview.png'
                 write_pic(filled_contour_preview_png, filled_contour)
 
             contours_in_filled_contour, _ = findContours(filled_contour, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
@@ -6459,6 +7609,7 @@ def seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type):
                 if do_dev_pic:
                     textblock_bubbles = get_textblock_bubbles(bubble_mask, textblocks)
                     cp_textblock_jpg = current_dir / f'TextBlock-{cnt_ind}.jpg'
+                    logger.warning(f'{cp_textblock_jpg=}')
                     write_pic(cp_textblock_jpg, textblock_bubbles)
                 logger.warning(f'{len(textblocks)=}, 分水岭切割失败')
                 # 再用轴点针转切割
@@ -6485,8 +7636,8 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
 
     added_frames_jpg = img_file.parent / f'{img_file.stem}-加框.jpg'
 
-    bubble_mask_png = current_dir / 'bubble_mask.png'
-    letter_mask_png = current_dir / 'letter_mask.png'
+    bubble_mask_png = debug_dir / f'{media_type}_bubble_mask.png'
+    letter_mask_png = debug_dir / f'{media_type}_letter_mask.png'
 
     img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
     if added_frames_jpg.exists():
@@ -6552,7 +7703,7 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
         cp_preview_jpg = auto_subdir / f'{img_file.stem}-{color_bubble.rgb_str}-{color_bubble.color_name}~{color_letter.rgb_str}-{color_letter.color_name}.jpg'
         cp_mask_cnt_png = auto_subdir / f'{img_file.stem}-Mask-{color_bubble.rgb_str}-{color_bubble.color_name}~{color_letter.rgb_str}-{color_letter.color_name}.png'
 
-        filter_cnts = get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mask)
+        filter_cnts = get_raw_bubbles(bubble_mask, letter_mask, left_sample, right_sample, CTD_mask, bboxes)
         colorful_raw_bubbles = get_colorful_bubbles(img_raw, filter_cnts)
         # ================切割相连气泡================
         single_cnts, all_textblocks = seg_bubbles(filter_cnts, bubble_mask, letter_mask, media_type)
@@ -6594,7 +7745,7 @@ def get_bubbles_by_cp(img_file, color_pattern, frame_grid_strs, CTD_mask, media_
             single_cnts_grids_ordered.append(single_cnts_grid)
         ordered_cnts = list(chain(*single_cnts_grids_ordered))
 
-    if bboxes:
+    if color_bubble is None and bboxes:
         filtered_cnts = []
         for o in range(len(ordered_cnts)):
             cnt = ordered_cnts[o]
@@ -6655,7 +7806,7 @@ def analyze1pic(img_file, frame_data, color_patterns, media_type, auto_subdir):
     line_bboxes = []
     if use_torch and CTD_model is not None:
         CTD_mask = get_CTD_mask(img_file)
-        if better_data and do_dev_pic:
+        if better_data:  # and do_dev_pic
             mask, blks, lines_map, resize_ratio = get_CTD_data(img_raw)
             bccs, lines = CTD2data(blks, lines_map, resize_ratio)
             line_img = img_raw.copy()
@@ -6671,8 +7822,9 @@ def analyze1pic(img_file, frame_data, color_patterns, media_type, auto_subdir):
                 bbox = (bx1, by1, bx2, by2)
                 line_bboxes.append(bbox)
                 rectangle(line_img, (bx1, by1), (bx2, by2), (0, 0, 255), 1)
-            line_path = current_dir / 'line_anno.png'
-            write_pic(line_path, line_img)
+            if do_dev_pic:
+                line_path = debug_dir / f'{media_type}_line_anno.png'
+                write_pic(line_path, line_img)
     else:
         CTD_mask = None
         mask, bccs, lines = None, None, None
@@ -6844,7 +7996,7 @@ def get_single_cnts(img_raw, mask_pics):
         letter_mask = color_letter.get_range_img(img_raw)
 
         if do_dev_pic:
-            letter_mask_png = current_dir / 'letter_mask.png'
+            letter_mask_png = debug_dir / f'{media_type}_letter_mask.png'
             write_pic(letter_mask_png, letter_mask)
 
         # ================获取对应的气泡文字蒙版================
@@ -6924,7 +8076,7 @@ def get_single_cnts(img_raw, mask_pics):
                             mod_img[bubble_mask == 255] = color_white
                             mod_img[bit_white_bubble_inv == 255] = color_white
                             if do_dev_pic:
-                                mod_img_png = current_dir / 'mod_img.png'
+                                mod_img_png = debug_dir / f'{media_type}_mod_img.png'
                                 write_pic(mod_img_png, mod_img)
                         elif color_letter.rgb_str == '000000':
                             # 文字颜色为黑色则使用原图把气泡颜色替换为白色后的转换成的灰度图
@@ -7001,6 +8153,8 @@ def get_start_panels(frame_grid_strs):
     return panels
 
 
+# @timer_decorator
+@logger.catch
 def get_panel_layers(pic_div_psd):
     panel_layers = []
     if pic_div_psd.exists():
@@ -7068,6 +8222,7 @@ def get_grid_masks(img_file, frame_grid_strs):
         color = colormap_tab20(p % 20)[:3]
         color_rgb = tuple(int(c * 255) for c in color)
         color_bgra = color_rgb[::-1] + (255,)
+        color_bgr127 = color_rgb[::-1] + (127,)
 
         if isinstance(panel, tuple):
             # ================内外方框================
@@ -7082,6 +8237,7 @@ def get_grid_masks(img_file, frame_grid_strs):
             pt3 = (xx, yy)
             pt4 = (xx + ww, yy + hh)
             panel_draw.rectangle([pt1, pt2], outline=color_bgra, width=3)
+            panel_draw.rectangle([pt3, pt4], outline=color_bgr127, width=3)
             # 以外圈矩形为基点计算序数坐标
             text_pos = (x + 5, y - 5)
             # 生成矩形画格信息对应的二值图像，画格内部为 255（白色），其他部分为 0（黑色）
@@ -7118,10 +8274,10 @@ def get_grid_masks(img_file, frame_grid_strs):
             all_y.sort()
 
             # 计算图层边界框的位置、宽度和高度
-            layer_x = min(all_x)
-            layer_y = min(all_y)
-            layer_w = max(all_x) - min(all_x)
-            layer_h = max(all_y) - min(all_y)
+            layer_x = int(min(all_x))
+            layer_y = int(min(all_y))
+            layer_w = int(max(all_x) - min(all_x))
+            layer_h = int(max(all_y) - min(all_y))
             layer_br = (layer_x, layer_y, layer_w, layer_h)
             logger.warning(f'{layer_br=}')
             layer_area = layer_w * layer_h
@@ -7194,6 +8350,8 @@ def ocr_by_tesseract_simple(image, media_lang, vert=False):
 # 'height': 边界框的高度。
 # 'conf': 置信度，表示 Tesseract 识别结果的可信度，范围为 0 到 100。
 # 'text': 识别的文本。
+
+
 def ocr_by_tesseract(image, media_lang, vert=False):
     # 获取所选语言的配置
     language_config = tesseract_language_options[media_lang]
@@ -7629,11 +8787,11 @@ def get_ordered_cnts(single_cnts, img_file, grid_masks, bubble_order_strs, media
 def get_sd_img_folder(img_folder):
     # ================获取漫画名================
     series4file = img_folder.name
-    M_issue_w_dot = p_issue_w_dot.match(folder_name)
+    m_issue_w_dot = p_issue_w_dot.match(folder_name)
     issue = None
-    if M_issue_w_dot:
-        series4file = M_issue_w_dot.group(1)
-        issue = M_issue_w_dot.group(2)
+    if m_issue_w_dot:
+        series4file = m_issue_w_dot.group(1)
+        issue = m_issue_w_dot.group(2)
 
     sd_folder_name = f'{series4file}-SD'
     if issue:
@@ -7707,16 +8865,28 @@ def figure1pic(img_folder, i):
 def order1pic(img_folder, i, media_type):
     auto_subdir = Auto / img_folder.name
     img_list = get_valid_imgs(img_folder)
+
     frame_yml = img_folder.parent / f'{img_folder.name}.yml'
     order_yml = img_folder.parent / f'{img_folder.name}-气泡排序.yml'
     frame_data = iload_data(frame_yml)
     order_data = iload_data(order_yml)
+
+    lp_txt = img_folder.parent / f'{img_folder.name}-8萌翻.txt'
+    rlp_txt = img_folder.parent / f'{img_folder.name}翻译_0.txt'
+    rlp_para_dic = None
+    if rlp_txt.exists():
+        rlp_text = read_txt(rlp_txt)
+        rlp_lines = rlp_text.splitlines()
+        rlp_index_dict, rlp_inds = create_index_dict(img_list, rlp_lines, 'txt')
+        rlp_para_dic = create_para_dic(img_list, rlp_index_dict, rlp_inds, rlp_lines, 'txt')
+
     # ================气泡蒙版================
     all_masks = get_valid_imgs(img_folder, vmode='mask')
 
     img_file = img_list[i]
     logger.warning(f'{img_file=}')
     order_preview_jpg = auto_subdir / f'{img_file.stem}-气泡排序.jpg'
+    lp_preview_jpg = auto_subdir / f'{img_file.stem}-气泡萌翻.jpg'
     img_raw = imdecode(fromfile(img_file, dtype=uint8), -1)
     ih, iw = img_raw.shape[0:2]
 
@@ -7749,9 +8919,76 @@ def order1pic(img_folder, i, media_type):
         logger.warning(f'{len(single_cnts)=}')
         logger.warning(f'{len(single_cnts_grids_ordered)=}')
         logger.warning(f'{len(ordered_cnts)=}')
-        order_preview = get_order_preview(marked_frames, single_cnts_grids_ordered)
-        write_pic(order_preview_jpg, order_preview)
-        if sd_img_folder.exists() and not bubble_order_strs:
+        if not rlp_para_dic:
+            order_preview = get_order_preview(marked_frames, single_cnts_grids_ordered)
+            write_pic(order_preview_jpg, order_preview)
+
+        if rlp_para_dic:
+            formatted_stem = get_formatted_stem(img_file)
+            rlp_pic_bubbles = rlp_para_dic.get(formatted_stem, [])
+            if len(rlp_pic_bubbles) == len(single_cnts) == 1:
+                new_cnts = single_cnts
+            else:
+                new_cnts = []
+                roi_cnts = deepcopy(single_cnts)
+                for b in range(len(rlp_pic_bubbles)):
+                    rlp_pic_bubble = rlp_pic_bubbles[b]
+                    coor_x = rlp_pic_bubble['coor_x']
+                    coor_y = rlp_pic_bubble['coor_y']
+                    x = int(iw * coor_x)
+                    y = int(ih * coor_y)
+                    pt_xy = (x, y)
+                    # 收集所有轮廓到点的距离
+                    distances = []
+                    for c, roi_cnt in enumerate(roi_cnts):
+                        distance = pointPolygonTest(roi_cnt.contour, pt_xy, True)
+                        distances.append((distance, roi_cnt))
+                    # 根据距离排序，找到最近的轮廓
+                    distances.sort(key=lambda x: -x[0])
+                    if distances:
+                        distances0 = distances[0]
+                        distance, roi_cnt = distances0
+                        if distance > 0 or abs(distance) <= dist_thres:
+                            new_cnts.append(roi_cnt)
+                            roi_cnts = [x for x in roi_cnts if x != roi_cnt]
+                new_cnts.extend(roi_cnts)
+            single_cnts_grids_ordered = [new_cnts]
+            order_preview = get_order_preview(marked_frames, single_cnts_grids_ordered)
+            write_pic(order_preview_jpg, order_preview)
+
+            img_pil = fromarray(cvtColor(marked_frames, COLOR_BGR2RGB))
+            num_overlay = Image.new('RGBA', img_pil.size, rgba_zero)
+            num_draw = ImageDraw.Draw(num_overlay)
+            # ================绘制示意图================
+            for b in range(len(rlp_pic_bubbles)):
+                rlp_pic_bubble = rlp_pic_bubbles[b]
+                group = rlp_pic_bubble['group']
+                coor_x = rlp_pic_bubble['coor_x']
+                coor_y = rlp_pic_bubble['coor_y']
+                x = int(iw * coor_x)
+                y = int(ih * coor_y)
+                pt_xy = (x, y)
+                text = str(b + 1)  # 序数
+                # 在pt_xy位置画一个紫色的点
+                radius = 5  # 点的半径
+                anchor_pt = (x - radius, y - radius, x + radius, y + radius)
+                text_bbox = num_draw.textbbox(pt_xy, text, font=msyh_font100, anchor="mm")
+                text_width = text_bbox[2] - text_bbox[0]
+                text_height = text_bbox[3] - text_bbox[1]
+                # xy_pos = (x - text_width // 2, y - text_height // 2)
+                # 在点的右下角
+                xy_pos = (x + radius, y + radius)
+                if group == 1:
+                    num_draw.ellipse(anchor_pt, fill=color_purple)
+                    num_draw.text(xy_pos, text, font=msyh_font100, fill=trans_red)
+                else:
+                    num_draw.ellipse(anchor_pt, fill=color_olive)
+                    num_draw.text(xy_pos, text, font=msyh_font100, fill=trans_blue)
+            img_pil.paste(num_overlay, mask=num_overlay)
+            lp_preview = cvtColor(array(img_pil), COLOR_RGB2BGR)
+            write_pic(lp_preview_jpg, lp_preview)
+
+        elif sd_img_folder.exists() and not bubble_order_strs:
             if len(sd_bubble_order_strs) == len(ordered_cnts):
                 # 把低清版图源的排序转换并录入到高清版图源
                 custom_cnts = []
@@ -7833,8 +9070,9 @@ def get_order_preview(marked_frames, single_cnts_grids_ordered):
             for b in range(len(single_cnts_grid)):
                 bubble_cnt = single_cnts_grid[b]
                 # 绿色圆圈表示质心
-                r_pt = 10  # 锚点半径
-                anchor_pt = (bubble_cnt.cx - r_pt, bubble_cnt.cy - r_pt, bubble_cnt.cx + r_pt, bubble_cnt.cy + r_pt)
+                radius = 10  # 锚点半径
+                anchor_pt = (
+                    bubble_cnt.cx - radius, bubble_cnt.cy - radius, bubble_cnt.cx + radius, bubble_cnt.cy + radius)
                 trans_green = (0, 255, 0, line_alpha)
                 line_draw.ellipse(anchor_pt, fill=trans_green)
                 # 如果不是该画格内的第一个气泡，与上一个气泡的质心画连线
@@ -7865,6 +9103,8 @@ def step2_order(img_folder, media_type):
     img_list = get_valid_imgs(img_folder)
     cnts_dic_pkl = img_folder.parent / f'{img_folder.name}.pkl'
     cnts_dic = iload_data(cnts_dic_pkl)
+    lp_txt = img_folder.parent / f'{img_folder.name}-8萌翻.txt'
+    rlp_txt = img_folder.parent / f'{img_folder.name}翻译_0.txt'
 
     if thread_method == 'queue':
         for i in range(len(img_list)):
@@ -8206,7 +9446,7 @@ def get_final_token(token1, token2, up_ratio, is_sent_start, i1, i2, text1, line
         else:
             if token2.isalpha():
                 if ori_word_lower.endswith(('ing', 'ed')):
-                    if is_valid_tense(ori_word):
+                    if use_nlp and is_valid_tense(ori_word):
                         # 如果是过去时或进行时的合理词，保留原词
                         final_token = token1
                     elif rep_word_lower in good_words or rep_word_lower in fine_words:
@@ -8280,8 +9520,12 @@ def fix_w_tess(text1, text2):
     lines2 = text2.strip().splitlines()
     up_ratio = get_upper_ratio(text1)
     text1_merged = ' '.join(lines1)
-    doc = nlp(text1_merged)
-    sent_starts = [sent.start_char for sent in doc.sents]
+    if use_nlp:
+        doc = nlp(text1_merged)
+        sent_starts = [sent.start_char for sent in doc.sents]
+    else:
+        tokens = sent_tokenize(text1_merged)
+        sent_starts = [text1_merged.find(sent) for sent in tokens]
     new_lines1 = []
 
     # 如果 lines1 比 lines2 少一行
@@ -8690,6 +9934,455 @@ def draw_para(img_tups, ocr_tups, page_ind, bubble_ind):
     return proj_img
 
 
+# ================图形化参数================
+@logger.catch
+def cal_hori_paras(hori_proj_bi_inv, upper, lower):
+    row_segment = hori_proj_bi_inv[int(upper):int(lower), :]
+    # 每行宽度
+    widths = np.sum(row_segment == 255, axis=1)
+    # 计算方差
+    vari = np.var(widths)
+    area = sum(widths)
+    avg_width = np.mean(widths)
+    logger.debug(f'{area=}, {len(widths)=}, {avg_width=:.2f}, {vari=:.2f}')
+    return area, widths, avg_width, vari
+
+
+@logger.catch
+def better_line_proj_cnts(line_proj_cnts, hori_proj_bi_inv):
+    # ================处理只有点的文本行================
+    if len(line_proj_cnts) >= 2:
+        # ================点在最后一行则不处理================
+        br_hs = [x.br_h for x in line_proj_cnts[:-1]]
+        min_br_h = min(br_hs)
+        if min_br_h <= dot_h:
+            # ================找出所有点型文本行================
+            dot_inds = []
+            ind = 0
+            while ind < len(line_proj_cnts) - 1:
+                line_proj_cnt = line_proj_cnts[ind]
+                if line_proj_cnt.br_h <= dot_h:
+                    dot_inds.append(ind)
+                ind += 1
+
+            # ================找出所有点型文本行================
+            new_line_proj_cnts = []
+            pin = 0
+            while pin < len(line_proj_cnts):
+                line_proj_cnt = line_proj_cnts[pin]
+                if pin in dot_inds:
+                    line_proj_cnt = line_proj_cnts[pin]
+                    line_proj_cnt_next = line_proj_cnts[pin + 1]
+                    # 涂白最右边1像素宽
+                    hori_proj_dot_roi = hori_proj_bi_inv.copy()
+                    hori_proj_dot_roi[:line_proj_cnt.br_y - 1, :] = 0
+                    hori_proj_dot_roi[line_proj_cnt.br_v:line_proj_cnt_next.br_y, -1:] = 255
+                    hori_proj_dot_roi[line_proj_cnt_next.br_v + 1:, :] = 0
+                    proj_dot_contours, proj_dot_hier = findContours(hori_proj_dot_roi, RETR_EXTERNAL,
+                                                                    CHAIN_APPROX_SIMPLE)
+                    proj_dot_cnts = [Contr(x) for x in proj_dot_contours]
+                    proj_dot_cnts.sort(key=lambda x: x.br_y)
+                    proj_dot_cnts_ok = [x for x in proj_dot_cnts if x.area >= min_cnt_area]
+                    if proj_dot_cnts_ok:
+                        alt_cnt = proj_dot_cnts_ok[0]
+                    else:  # if proj_dot_cnts
+                        alt_cnt = proj_dot_cnts[0]
+                    new_line_proj_cnts.append(alt_cnt)
+                elif pin - 1 in dot_inds:
+                    pass
+                else:
+                    new_line_proj_cnts.append(line_proj_cnt)
+                pin += 1
+            line_proj_cnts = new_line_proj_cnts
+    return line_proj_cnts
+
+
+@logger.catch
+def get_sub_line_proj_cnts(proj_cnt_raw, hori_proj_bi_inv, refer_h, proj_mask):
+    sub_line_proj_cnts = []
+    logger.debug(f'{proj_cnt_raw=}, {proj_cnt_raw.avg_w=:.2f}')
+    upper = proj_cnt_raw.br_y
+    lower = proj_cnt_raw.br_v
+    upper_raw = deepcopy(upper)
+    lower_raw = deepcopy(lower)
+    area, widths, avg_width, vari = cal_hori_paras(hori_proj_bi_inv, upper, lower)
+    area0, widths0, avg_width0, vari0 = cal_hori_paras(hori_proj_bi_inv, upper, upper + refer_h)
+    area1, widths1, avg_width1, vari1 = cal_hori_paras(hori_proj_bi_inv, lower - refer_h, lower)
+    # ================估测所需截断宽度================
+    if proj_cnt_raw.br_w <= 60:
+        ratio = 0.12
+    elif proj_cnt_raw.br_w <= 120:
+        ratio = 0.1
+    elif proj_cnt_raw.br_w <= 180:
+        ratio = 0.08
+    elif proj_cnt_raw.br_w <= 240:
+        ratio = 0.06
+    else:
+        ratio = 0.04
+    line_edge = proj_cnt_raw.br_w * ratio
+    line_edge = clamp(line_edge, line_edge_min, line_edge_max)
+    line_edge = int(line_edge)
+    # ================仅对对话框优化================
+    if refer_h <= 20:
+        if avg_width0 <= line_edge + 2:
+            logger.error(f'{avg_width0=:.2f}, {line_edge=}, 首行过短')
+            upper += refer_h
+        if avg_width1 <= line_edge + 2:
+            logger.error(f'{avg_width1=:.2f}, {line_edge=}, 尾行过短')
+            lower -= refer_h
+    # ================涂黑白色轮廓中最右边line_edge像素宽================
+    hori_proj_roi = hori_proj_bi_inv.copy()
+    hori_proj_roi[:proj_cnt_raw.br_y - 1, :] = 0
+    hori_proj_roi[int(upper):int(lower), -line_edge:] = 0
+    hori_proj_roi[proj_cnt_raw.br_v + 1:, :] = 0
+
+    proj_contours_fit, fit_hier = findContours(hori_proj_roi, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+    proj_cnts_fit = [Contr(x) for x in proj_contours_fit]
+    proj_cnts_fit.sort(key=lambda x: x.br_y)
+    proj_cnts_fit_ok = [x for x in proj_cnts_fit if x.area >= min_cnt_area]
+    logger.warning(f'[{line_edge}]{len(proj_cnts_fit)=}, {len(proj_cnts_fit_ok)=}')
+
+    if len(proj_cnts_fit) <= 2 and len(proj_cnts_fit_ok) < 2:
+        # 切分不成功，可能不是粘连
+        sub_line_proj_cnts.append(proj_cnt_raw)
+    else:
+        # 多个文本行粘连切分成功
+        split_lines = []
+        for f in range(len(proj_cnts_fit_ok) - 1):
+            cnt_fit = proj_cnts_fit_ok[f]
+            cnt_fit_next = proj_cnts_fit_ok[f + 1]
+            # 切割线应该在白色区域的最小值处
+            start_y = cnt_fit.br_v
+            end_y = cnt_fit_next.br_y
+            row_segment = hori_proj_bi_inv[start_y:end_y, :]
+            white_px_count = np.sum(row_segment == 255, axis=1)
+            if len(white_px_count) > 0:
+                split_line = argmin(white_px_count)
+            else:
+                split_line = 0
+            split_line += start_y
+            split_lines.append(split_line)
+        all_lines = [proj_cnts_fit_ok[0].br_y - 1] + split_lines + [proj_cnts_fit_ok[-1].br_v + 1]
+        # ================建立基准行================
+        for a in range(len(all_lines) - 1):
+            start_line = all_lines[a]
+            end_line = all_lines[a + 1]
+            proj_roi_line = hori_proj_bi_inv.copy()
+            if a == 0:
+                # 有粘连的行的第一个
+                proj_roi_line[:start_line - 1, :] = 0
+            else:
+                proj_roi_line[:start_line, :] = 0
+            if a == len(all_lines) - 1:
+                # 有粘连的行的最后一个
+                proj_roi_line[end_line + 1:, :] = 0
+            else:
+                proj_roi_line[end_line:, :] = 0
+
+            contours_line, line_hier = findContours(proj_roi_line, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+            cnts_line = [Contr(x) for x in contours_line]
+            cnts_line.sort(key=lambda x: x.br_y)
+            cnts_line_ok = [x for x in cnts_line if x.area >= min_cnt_area]
+            if cnts_line_ok:
+                line_proj_cnt = cnts_line_ok[0]
+            else:  # if cnts_line:
+                line_proj_cnt = cnts_line[0]
+            sub_line_proj_cnts.append(line_proj_cnt)
+    # 示意图
+    proj_mask[int(upper):int(lower), -line_edge:] = 127
+    return sub_line_proj_cnts, proj_mask
+
+
+@logger.catch
+def get_line_proj_cnts(img_np, hori_proj_bi, ver_proj_bi, direction):
+    # ================图像参数================
+    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
+    white_bg = ones((nh, nw, 3), dtype=uint8) * 255
+    black_bg = zeros((nh, nw), dtype=uint8)
+
+    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+    ret, img_bi = threshold(img_gray, bi_thres, 255, THRESH_BINARY)
+    # 白色二值化文字
+    img_bi_inv = bitwise_not(img_bi)
+    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+    # 将img_np中特别浅的部分变为白色
+    img_opt = img_gray.copy()
+    img_opt[img_opt >= white_thres] = 255
+
+    hori_proj_bi_np = array(hori_proj_bi)
+    hori_proj_bi_inv = bitwise_not(hori_proj_bi_np)
+
+    ver_proj_bi_np = array(ver_proj_bi)
+    ver_proj_bi_inv = bitwise_not(ver_proj_bi_np)
+
+    # ================示意图================
+    if direction == 'Horizontal':
+        proj_mask = hori_proj_bi_np.copy()
+    else:
+        proj_mask = ver_proj_bi_np.copy()
+
+    # ================笔画和原始投影轮廓================
+    stroke_contours, stroke_hier = findContours(img_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+
+    stroke_cnts = [Contr(x) for x in stroke_contours]
+    stroke_cnts = [x for x in stroke_cnts if x.area >= 1]
+    stroke_cnts.sort(key=lambda x: (x.br_x, x.br_y))
+
+    refer_w = get_refer_dimension(stroke_cnts, 'width')
+    refer_h = get_refer_dimension(stroke_cnts, 'height')
+    # ================多行文本的最低高度================
+    line_multi_h_min = int(max(line_multi_h, 2 * refer_h - 1))
+    line_multi_w_min = int(max(line_multi_w, 2 * refer_w - 1))
+
+    if direction == 'Horizontal':
+        proj_contours_raw, raw_hier = findContours(hori_proj_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+        proj_cnts_raw = [Contr(x) for x in proj_contours_raw]
+        proj_cnts_raw.sort(key=lambda x: x.br_y)
+        line_multi_roi_min = line_multi_h_min
+    else:
+        proj_contours_raw, raw_hier = findContours(ver_proj_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+        proj_cnts_raw = [Contr(x) for x in proj_contours_raw]
+        proj_cnts_raw.sort(key=lambda x: -x.br_x)
+        line_multi_roi_min = line_multi_w_min
+
+    proj_cnts_raw_ok = [x for x in proj_cnts_raw if x.area >= min_cnt_area]
+    br_hs = [x.br_h for x in proj_cnts_raw_ok]
+    br_ws = [x.br_w for x in proj_cnts_raw_ok]
+
+    if direction == 'Horizontal':
+        br_rois = br_hs
+    else:
+        br_rois = br_ws
+
+    line_proj_cnts = []
+    if media_type in ['Manga']:
+        line_proj_cnts = deepcopy(proj_cnts_raw)
+    elif len(proj_cnts_raw) == 1 and not proj_cnts_raw_ok:
+        # ================短小的一行，只有一个符号（省略号之类）================
+        line_proj_cnts = deepcopy(proj_cnts_raw)
+    elif br_rois and max(br_rois) <= line_multi_roi_min:
+        # ================行高均符合规则，不存在多行粘连================
+        line_proj_cnts = deepcopy(proj_cnts_raw)
+    else:
+        # ================可能存在多行粘连================
+        for p in range(len(proj_cnts_raw)):
+            proj_cnt_raw = proj_cnts_raw[p]
+            if direction == 'Horizontal':
+                br_roi = proj_cnt_raw.br_h
+            else:
+                br_roi = proj_cnt_raw.br_w
+            if br_roi <= line_multi_roi_min:
+                # ================单行================
+                line_proj_cnts.append(proj_cnt_raw)
+            elif direction == 'Horizontal':
+                # ================多行================
+                sub_line_proj_cnts, proj_mask = get_sub_line_proj_cnts(proj_cnt_raw, hori_proj_bi_inv, refer_h,
+                                                                       proj_mask)
+                line_proj_cnts.extend(sub_line_proj_cnts)
+
+    if direction == 'Horizontal':
+        line_proj_cnts = better_line_proj_cnts(line_proj_cnts, hori_proj_bi_inv)
+    # ================添加文本行矩形================
+    for line_proj_cnt in line_proj_cnts:
+        line_proj_cnt.add_line_polygon(nw, nh)
+
+    # ================进行高度筛选================
+    if len(line_proj_cnts) >= 2:
+        if direction == 'Horizontal':
+            line_proj_cnts = [x for x in line_proj_cnts if x.br_h >= textline_h_min]
+        # else:
+        #     line_proj_cnts = [x for x in line_proj_cnts if x.br_w >= textline_w_min]
+
+    if direction == 'Horizontal':
+        for l in range(len(stroke_cnts)):
+            # ================每个笔画轮廓================
+            stroke_cnt = stroke_cnts[l]
+            # 绘制stroke_cnt的遮罩
+            stroke_mask = drawContours(black_bg.copy(), [stroke_cnt.contour], -1, (255), FILLED)
+            # write_pic(stroke_jpg, stroke_mask)
+            overlap_ratios = []
+            for t in range(len(line_proj_cnts)):
+                # ================每个基准行================
+                line_proj_cnt = line_proj_cnts[t]
+                if stroke_cnt.polygon.intersects(line_proj_cnt.line_polygon):
+                    # 获取交集区域
+                    overlap = stroke_cnt.polygon.intersection(line_proj_cnt.line_polygon)
+                    line_mask = rectangle(black_bg.copy(), line_proj_cnt.line_br_xy, line_proj_cnt.line_br_uv, (255),
+                                          FILLED)
+                    # 创建交集遮罩
+                    overlap_mask = bitwise_and(stroke_mask, line_mask)
+                    # write_pic(overlap_jpg, overlap_mask)
+                    # 计算两个区域的非白色像素数量
+                    overlap_non_white_area = np.sum((img_opt[overlap_mask == 255] != 255).astype(int))
+                    stroke_non_white_area = np.sum((img_opt[stroke_mask == 255] != 255).astype(int))
+                    if stroke_non_white_area == 0:
+                        overlap_ratio = 0
+                    else:
+                        overlap_ratio = overlap_non_white_area / stroke_non_white_area
+                else:
+                    overlap_ratio = 0
+                overlap_ratios.append(overlap_ratio)
+
+            ind = overlap_ratios.index(max(overlap_ratios))
+            # logger.debug(f'[{ind}]{max(overlap_ratios)=}')
+            value_2nd, index_2nd = find_nth_largest(overlap_ratios, 2)
+            line_proj_cnt_1st = line_proj_cnts[ind]
+            # 笔画相对于行高的比例
+            h_ratio = stroke_cnt.br_h / line_proj_cnt_1st.br_h
+
+            if max(overlap_ratios) >= 0.75 and h_ratio <= 1.25:
+                belong = 'A'
+                # 绝大部分都在一个文本行内
+                line_proj_cnt_1st.add_stroke(stroke_cnt)
+            elif len(overlap_ratios) >= 2 and value_2nd >= 0.1:
+                logger.debug(f'{len(line_proj_cnts)=}, {len(overlap_ratios)=}')
+                belong = 'B'
+                # 找到与笔画重叠的文本行
+                overlapping_lines = [
+                    line_proj_cnts[ind],
+                    line_proj_cnts[index_2nd],
+                ]
+                for line_proj_cnt in overlapping_lines:
+                    # 创建新的交集遮罩
+                    line_mask = rectangle(black_bg.copy(), line_proj_cnt.line_br_xy, line_proj_cnt.line_br_uv, (255),
+                                          FILLED)
+                    intersected_mask = bitwise_and(stroke_mask, line_mask)
+                    # 创建新的笔画轮廓
+                    sub_stroke_contours, sub_stroke_hier = findContours(intersected_mask, RETR_EXTERNAL,
+                                                                        CHAIN_APPROX_SIMPLE)
+                    sub_stroke_cnts = [Contr(x) for x in sub_stroke_contours]
+                    sub_stroke_cnts = [x for x in sub_stroke_cnts if x.area >= 1]
+                    for stroke_cnt in sub_stroke_cnts:
+                        line_proj_cnt.add_stroke(stroke_cnt)
+            elif max(overlap_ratios) >= 0.01:
+                belong = 'C'
+                line_proj_cnt_1st.add_stroke(stroke_cnt)
+            else:
+                belong = 'D'
+                # 无归属且无重叠面积则归于最近的line_proj_cnt
+                nearest_line_proj_cnt = min(line_proj_cnts, key=lambda cnt: abs(cnt.br_y - stroke_cnt.br_y))
+                nearest_line_proj_cnt.add_stroke(stroke_cnt)
+
+            imes = f'[{l}]{belong}[{len(line_proj_cnts)}行之{ind + 1}]{max(overlap_ratios)=:.2f}, {h_ratio=:.2f}'
+            if len(overlap_ratios) >= 2:
+                imes += f', {value_2nd=}, {index_2nd=}'
+    if not line_proj_cnts:
+        if do_dev_pic:
+            hori_proj_bi_png = debug_dir / f'{media_type}_hori_proj_bi.png'
+            img_np_png = debug_dir / f'{media_type}_img_np.png'
+            write_pic(hori_proj_bi_png, hori_proj_bi)
+            write_pic(img_np_png, img_np)
+    if len(line_proj_cnts) == 0:
+        print()
+    return line_proj_cnts, proj_mask
+
+
+@logger.catch
+def draw_line_proj_cnts(img_np, line_proj_cnts):
+    ih, iw = img_np.shape[0:2]
+    black_bg = zeros((ih, iw), dtype=uint8)
+
+    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
+    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
+    ret, img_bi = threshold(img_gray, bi_thres, 255, THRESH_BINARY)
+    # 白色二值化文字
+    img_bi_inv = bitwise_not(img_bi)
+    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
+    # 将img_np中特别浅的部分变为白色
+    img_opt = img_gray.copy()
+    img_opt[img_opt >= white_thres] = 255
+
+    # ================绘制示意图的彩色文本行边框================
+    img_w_lines = deepcopy(img_pil)
+    lines_draw = ImageDraw.Draw(img_w_lines, 'RGBA')
+    for p in range(len(line_proj_cnts)):
+        cnt = line_proj_cnts[p]
+        color = colormap_tab20(p % 20)[:3]
+        color_rgb = tuple(int(c * 255) for c in color)
+        color_rgba = color_rgb + (200,)
+        if text_direction == 'Horizontal':
+            start_y = cnt.br_y
+            end_y = cnt.br_v
+            row_segment = img_bi[start_y:end_y + 1, :]
+            if np.any(row_segment == 0):
+                left = np.min(where(row_segment == 0)[1])
+                right = np.max(where(row_segment == 0)[1])
+                lines_draw.rectangle([(left, start_y), (right, end_y)], outline=color_rgba)
+        else:
+            start_x = cnt.br_x
+            end_x = cnt.br_u
+            row_segment = img_bi[:, start_x:end_x + 1]
+            if np.any(row_segment == 0):
+                up = np.min(where(row_segment == 0)[0])
+                down = np.max(where(row_segment == 0)[0])
+                lines_draw.rectangle([(start_x, up), (end_x, down)], outline=color_rgba)
+
+    # ================获取每行文本对应的笔画轮廓================
+    line_binarys = []
+    for t in range(len(line_proj_cnts)):
+        line_proj_cnt = line_proj_cnts[t]
+        contours = [x.contour for x in line_proj_cnt.strokes]
+        # line_binary = drawContours(black_bg.copy(), contours, -1, 255, FILLED)
+        # 初始化一个黑色背景
+        combined_mask = black_bg.copy()
+        # 对每个轮廓单独绘制
+        for contour in contours:
+            mask = black_bg.copy()  # 每个轮廓都用一个新的遮罩
+            drawContours(mask, [contour], -1, 255, FILLED)  # 绘制轮廓
+            combined_mask = bitwise_or(combined_mask, mask)  # 将当前轮廓的遮罩合并到总遮罩上
+        line_binary = combined_mask
+        # 最终的遮罩将所有轮廓合并，即使有重叠，重叠部分也是白色
+        line_binarys.append(line_binary)
+
+    # ================获取未归属区域================
+    mask_belong = black_bg.copy()
+    # 叠加所有文本行的掩模
+    for line_binary in line_binarys:
+        mask_belong = maximum(mask_belong, line_binary)
+    mask_unbelong = bitwise_not(mask_belong)
+
+    # ================计算周边区域归属并更新未归属区域================
+    line_binary_borders = []
+    for l in range(len(line_binarys)):
+        line_binary = line_binarys[l]
+        line_binary_d3 = dilate(line_binary, kernel3, iterations=1)
+        line_binary_border = bitwise_and(line_binary_d3, mask_unbelong)
+        line_binary_borders.append(line_binary_border)
+        # 更新 mask_unbelong 以去掉已归属的边界区域
+        mask_unbelong = bitwise_and(mask_unbelong, bitwise_not(line_binary_border))
+
+    # ================将未归属区域按基准矩形分配到每个文本行================
+    real_masks = []
+    textline_imgs = []
+    for t in range(len(line_proj_cnts)):
+        line_proj_cnt = line_proj_cnts[t]
+        line_binary = line_binarys[t]
+
+        line_binary_border = line_binary_borders[t]
+        # 创建每一行文本的基准矩形掩模
+        line_belong_mask = zeros_like(img_bi, dtype=uint8)
+        x, y, w, h = line_proj_cnt.line_br
+        line_belong_mask[y:y + h, x:x + w] = 255
+        # 将基准矩形掩模与mask_unbelong重叠的部分视为每一行的真正区域
+        line_belong_mask = minimum(line_belong_mask, mask_unbelong)
+        # 每一行的真正掩模为 line_binary 加上 line_binary_border 加上 line_belong_mask
+        real_mask = maximum(maximum(line_binary, line_binary_border), line_belong_mask)
+        real_masks.append(real_mask)
+        # ================获取每一行真正掩模对应的非白色像素区域================
+        # 创建一个白色背景图像
+        textline_img = ones_like(img_opt) * 255
+        # 从原始灰度图像提取非白色像素，并放置在白色背景图像上
+        textline_img[real_mask == 255] = img_opt[real_mask == 255]
+        textline_imgs.append(textline_img)
+        if do_dev_pic:
+            line_binary_png = debug_dir / f'{media_type}_line_binary.png'
+            textline_img_png = debug_dir / f'{media_type}_textline_img_{t + 1}.png'
+            write_pic(line_binary_png, line_binary)
+            write_pic(textline_img_png, textline_img)
+    return img_w_lines, line_binarys, textline_imgs
+
+
 @timer_decorator
 @logger.catch
 def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert):
@@ -8766,27 +10459,41 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             ver_proj_bi, ver_proj_data = get_proj_img(img_bi_pil, 'vertical', 'white')
 
             # ================绘制分行示意图================
-            line_proj_cnts, proj_mask = get_line_proj_cnts(img_np, hori_proj_bi)
+            direction = text_direction
+            if nw >= 1.4 * nh:
+                direction = 'Horizontal'
+            line_proj_cnts, proj_mask = get_line_proj_cnts(img_np, hori_proj_bi, ver_proj_bi, direction)
             proj_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_proj.png'
             write_pic(proj_png, proj_mask)
 
-            img_w_lines, stitched_bi_img, gray_limg = draw_line_proj_cnts(img_np, line_proj_cnts)
-            gray_limg = cvtColor(gray_limg, COLOR_BGR2GRAY)
-            gray_limg = cvtColor(gray_limg, COLOR_GRAY2BGR)
+            img_w_lines, line_binarys, textline_imgs = draw_line_proj_cnts(img_np, line_proj_cnts)
 
-            stitched_bi_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_bi.png'
-            stitched_gray_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_gray.png'
+            # ================每行的标记图================
             textlines_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_TextLines[{len(line_proj_cnts)}].jpg'
-            write_pic(stitched_bi_png, stitched_bi_img)
-            write_pic(stitched_gray_png, gray_limg)
             write_pic(textlines_jpg, img_w_lines)
+
+            if direction == 'Horizontal':
+                # ================制作最终效果图================
+                stitched_bi_img = stitch_imgs(line_binarys, 'B')
+                gray_limg = stitch_imgs(textline_imgs, 'W')
+                # gray_limg = stitch_imgs_normal(textline_imgs)
+                # 转为黑白
+                gray_limg = cvtColor(gray_limg, COLOR_BGR2GRAY)
+                gray_limg = cvtColor(gray_limg, COLOR_GRAY2BGR)
+                stitched_bi_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_bi.png'
+                stitched_gray_png = auto_subdir / f'P{page_ind}_B{bubble_ind}_gray.png'
+                write_pic(stitched_bi_png, stitched_bi_img)
+                write_pic(stitched_gray_png, gray_limg)
+            else:
+                gray_limg = None
 
             # ================笔画轮廓================
             stroke_contours, stroke_hier = findContours(img_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
             stroke_cnts = [Contr(x) for x in stroke_contours]
             stroke_cnts = [x for x in stroke_cnts if x.area >= 1]
             stroke_cnts.sort(key=lambda x: (x.br_x, x.br_y))
-            refer_h = get_refer_h(stroke_cnts)
+            refer_w = get_refer_dimension(stroke_cnts, 'width')
+            refer_h = get_refer_dimension(stroke_cnts, 'height')
 
             # ================气泡颜色参数================
             cp_bubble, cp_letter = color_pattern
@@ -8795,95 +10502,135 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             rec_textblocks = get_textblocks_full(img_np, media_type)
 
             # ================对裁剪后的图像进行文字识别================
-            tess_zdata, pic_ocr_data = get_ocr_data('tesseract', pic_ocr_data, img_np, media_lang, 1)
-            tess_zdata4 = [x for x in tess_zdata if x[0] == 4]
-            tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
+            if text_direction == 'Horizontal':
+                tess_zdata, pic_ocr_data = get_ocr_data('tesseract', pic_ocr_data, img_np, media_lang, 1)
+                tess_zdata4 = [x for x in tess_zdata if x[0] == 4]
+                tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
 
-            tes_zdata, pic_ocr_data = get_ocr_data('tes', pic_ocr_data, gray_limg, media_lang, 1)
-            tes_zdata4 = [x for x in tes_zdata if x[0] == 4]
-            tes_zdata5 = [x for x in tes_zdata if x[0] == 5]
+                tes_zdata, pic_ocr_data = get_ocr_data('tes', pic_ocr_data, gray_limg, media_lang, 1)
+                tes_zdata4 = [x for x in tes_zdata if x[0] == 4]
+                tes_zdata5 = [x for x in tes_zdata if x[0] == 5]
 
-            if 'Paddle' in custom_ocr_engines:
-                rec_results_paddle, pic_ocr_data = get_ocr_data('paddle', pic_ocr_data, img_np, media_lang, 2)
-            if 'Easy' in custom_ocr_engines:
-                rec_results_easy, pic_ocr_data = get_ocr_data('easy', pic_ocr_data, img_np, media_lang, 2)
-            if 'Baidu' in custom_ocr_engines:
-                rec_results_baidu, pic_ocr_data = get_ocr_data('baidu', pic_ocr_data, img_np, media_lang, 4)
-            if 'BaiduAccu' in custom_ocr_engines:
-                rec_results_baidu_accu, pic_ocr_data = get_ocr_data('baidu_accu', pic_ocr_data, img_np, media_lang, 4)
-            ocr_data[pic_locate] = pic_ocr_data
+                if custom_ocr_engines and 'Paddle' in custom_ocr_engines:
+                    rec_results_paddle, pic_ocr_data = get_ocr_data('paddle', pic_ocr_data, img_np, media_lang, 2)
+                if custom_ocr_engines and 'Easy' in custom_ocr_engines:
+                    rec_results_easy, pic_ocr_data = get_ocr_data('easy', pic_ocr_data, img_np, media_lang, 2)
+                if custom_ocr_engines and 'Baidu' in custom_ocr_engines:
+                    rec_results_baidu, pic_ocr_data = get_ocr_data('baidu', pic_ocr_data, img_np, media_lang, 4)
+                if custom_ocr_engines and 'BaiduAccu' in custom_ocr_engines:
+                    rec_results_baidu_accu, pic_ocr_data = get_ocr_data('baidu_accu', pic_ocr_data, img_np, media_lang,
+                                                                        4)
+                ocr_data[pic_locate] = pic_ocr_data
 
-            lines_tess = tesseract2text(tess_zdata)
-            lines_tes = tesseract2text(tes_zdata)
-            tess_text = lf.join(lines_tess)
-            tes_text = lf.join(lines_tes)
+                lines_tess = tesseract2text(tess_zdata)
+                lines_tes = tesseract2text(tes_zdata)
+                tess_text = lf.join(lines_tess)
+                tes_text = lf.join(lines_tes)
 
-            if SYSTEM in ['MAC', 'M1']:
-                rec_results_vision, pic_ocr_data = get_ocr_data('vision', pic_ocr_data, img_np, media_lang, 2)
-                lines_vision = rec2text(rec_results_vision)
-                vision_text = lf.join(lines_vision)
+                if SYSTEM in ['MAC', 'M1']:
+                    rec_results_vision, pic_ocr_data = get_ocr_data('vision', pic_ocr_data, img_np, media_lang, 2)
+                    lines_vision = rec2text(rec_results_vision)
+                    vision_text = lf.join(lines_vision)
 
-                rec_results_vis, pic_ocr_data = get_ocr_data('vis', pic_ocr_data, gray_limg, media_lang, 2)
-                lines_vis = rec2text(rec_results_vis)
-                vis_text = lf.join(lines_vis)
+                    rec_results_vis, pic_ocr_data = get_ocr_data('vis', pic_ocr_data, gray_limg, media_lang, 2)
+                    lines_vis = rec2text(rec_results_vis)
+                    vis_text = lf.join(lines_vis)
 
-                rec_results_winocr = None
-                rec_results_win = None
+                    rec_results_winocr = None
+                    rec_results_win = None
+                else:
+                    rec_results_winocr, pic_ocr_data = get_ocr_data('winocr', pic_ocr_data, img_np, media_lang, 1)
+                    vision_text = deepcopy(tess_text)
+
+                    rec_results_win, pic_ocr_data = get_ocr_data('win', pic_ocr_data, gray_limg, media_lang, 1)
+
+                    rec_results_vision = None
+                    rec_results_vis = None
+
+                # ================其他OCR================
+                refer_ocrs = []
+                if 'Baidu' in custom_ocr_engines:
+                    lines_baidu = [x[-1] for x in rec_results_baidu]
+                    baidu_text = lf.join(lines_baidu)
+                    baidu_fmt_text = better_text(baidu_text, 'baidu')
+                    refer_ocrs.append(baidu_fmt_text)
+                if 'BaiduAccu' in custom_ocr_engines:
+                    lines_baidu_accu = [x[-1] for x in rec_results_baidu_accu]
+                    baidu_accu_text = lf.join(lines_baidu_accu)
+                    baidu_accu_fmt_text = better_text(baidu_accu_text, 'baidu_accu')
+                    refer_ocrs.append(baidu_accu_fmt_text)
+                if 'Paddle' in custom_ocr_engines:
+                    lines_paddle = [x[-1] for x in rec_results_paddle]
+                    paddle_text = lf.join(lines_paddle)
+                    paddle_fmt_text = better_text(paddle_text, 'paddle')
+                    refer_ocrs.append(paddle_fmt_text)
+                if 'Easy' in custom_ocr_engines:
+                    lines_easy = [x[-1] for x in rec_results_easy]
+                    easy_text = lf.join(lines_easy)
+                    easy_fmt_text = better_text(easy_text, 'easy')
+                    refer_ocrs.append(easy_fmt_text)
+
+                tess_fmt_text = better_text(tess_text, 'tesseract')
+                tes_fmt_text = better_text(tes_text, 'tesseract')
+                refer_ocrs.append(tess_fmt_text)
+                if SYSTEM in ['MAC', 'M1']:
+                    vision_fmt_text = better_text(vision_text, 'vision')
+                    vision_fmt_text = fix_w_tess(vision_fmt_text, tess_fmt_text)
+                    vision_fmt_text = better_punct(vision_fmt_text, refer_ocrs)
+
+                    vis_fmt_text = better_text(vis_text, 'vis')
+                    vis_fmt_text = fix_w_tess(vis_fmt_text, tess_fmt_text)
+                    vis_fmt_text = better_punct(vis_fmt_text, refer_ocrs)
+                else:
+                    vision_fmt_text = deepcopy(tess_fmt_text)
+                    vis_fmt_text = deepcopy(tes_fmt_text)
             else:
-                rec_results_winocr, pic_ocr_data = get_ocr_data('winocr', pic_ocr_data, img_np, media_lang, 1)
-                vision_text = deepcopy(tess_text)
-
-                rec_results_win, pic_ocr_data = get_ocr_data('win', pic_ocr_data, gray_limg, media_lang, 1)
-
+                tess_zdata = None
+                tes_zdata = None
                 rec_results_vision = None
                 rec_results_vis = None
-
-            # ================其他OCR================
-            refer_ocrs = []
-            if 'Baidu' in custom_ocr_engines:
-                lines_baidu = [x[-1] for x in rec_results_baidu]
-                baidu_text = lf.join(lines_baidu)
-                baidu_fmt_text = better_text(baidu_text, 'baidu')
-                refer_ocrs.append(baidu_fmt_text)
-            if 'BaiduAccu' in custom_ocr_engines:
-                lines_baidu_accu = [x[-1] for x in rec_results_baidu_accu]
-                baidu_accu_text = lf.join(lines_baidu_accu)
-                baidu_accu_fmt_text = better_text(baidu_accu_text, 'baidu_accu')
-                refer_ocrs.append(baidu_accu_fmt_text)
-            if 'Paddle' in custom_ocr_engines:
-                lines_paddle = [x[-1] for x in rec_results_paddle]
-                paddle_text = lf.join(lines_paddle)
-                paddle_fmt_text = better_text(paddle_text, 'paddle')
-                refer_ocrs.append(paddle_fmt_text)
-            if 'Easy' in custom_ocr_engines:
-                lines_easy = [x[-1] for x in rec_results_easy]
-                easy_text = lf.join(lines_easy)
-                easy_fmt_text = better_text(easy_text, 'easy')
-                refer_ocrs.append(easy_fmt_text)
-
-            tess_fmt_text = better_text(tess_text, 'tesseract')
-            tes_fmt_text = better_text(tes_text, 'tesseract')
-            refer_ocrs.append(tess_fmt_text)
-            if SYSTEM in ['MAC', 'M1']:
-                vision_fmt_text = better_text(vision_text, 'vision')
-                vision_fmt_text = fix_w_tess(vision_fmt_text, tess_fmt_text)
-                vision_fmt_text = better_punct(vision_fmt_text, refer_ocrs)
-
-                vis_fmt_text = better_text(vis_text, 'vis')
-                vis_fmt_text = fix_w_tess(vis_fmt_text, tess_fmt_text)
-                vis_fmt_text = better_punct(vis_fmt_text, refer_ocrs)
-            else:
-                vision_fmt_text = deepcopy(tess_fmt_text)
-                vis_fmt_text = deepcopy(tes_fmt_text)
+                rec_results_winocr = None
+                rec_results_win = None
+                vis_fmt_text = None
+                if 'tess' in pic_ocr_data:
+                    line_text = pic_ocr_data['tess']
+                else:
+                    textlines = []
+                    for t in range(len(textline_imgs)):
+                        textline_img = textline_imgs[t]
+                        tess_zdata = ocr_by_tesseract(textline_img, media_lang)  # , vert=True
+                        tess_zdata4 = [x for x in tess_zdata if x[0] == 4]
+                        tess_zdata5 = [x for x in tess_zdata if x[0] == 5]
+                        words = [x[-1] for x in tess_zdata5]
+                        textline = ''.join(words)
+                        textlines.append(textline)
+                    line_text = lf.join(textlines)
+                    pic_ocr_data['tess'] = line_text
+                if python_ver in ['3.11.8']:
+                    if 'mangaocr' in pic_ocr_data:
+                        line_text = pic_ocr_data['mangaocr']
+                    else:
+                        textlines = []
+                        for t in range(len(textline_imgs)):
+                            textline_img = textline_imgs[t]
+                            textline_pil = fromarray(textline_img)
+                            res = mocr(textline_pil)
+                            textline = res
+                            textlines.append(textline)
+                        line_text = lf.join(textlines)
+                        pic_ocr_data['mangaocr'] = line_text
+                vision_fmt_text = line_text
+                ocr_data[pic_locate] = pic_ocr_data
 
             # ================绘制投影示意图================
             proj_jpg = auto_subdir / f'P{page_ind}_B{bubble_ind}_proj.jpg'
             img_tups = (img_np, gray_limg)
             ocr_tups = (tess_zdata, tes_zdata, rec_results_vision, rec_results_vis, rec_results_winocr, rec_results_win)
-            proj_img = draw_para(img_tups, ocr_tups, page_ind, bubble_ind)
-            proj_img.paste(hori_proj_bi, (0, 0))
-            proj_img.paste(ver_proj_bi, (nw, nh))
-            write_pic(proj_jpg, proj_img)
+            if text_direction == 'Horizontal':
+                proj_img = draw_para(img_tups, ocr_tups, page_ind, bubble_ind)
+                proj_img.paste(hori_proj_bi, (0, 0))
+                proj_img.paste(ver_proj_bi, (nw, nh))
+                write_pic(proj_jpg, proj_img)
 
             # ================获取气泡内文字的基本信息================
             raw_min_x, raw_min_y, raw_max_x, raw_max_y, min_x, min_y, max_x, max_y, center_pt = single_cnt.letter_coors
@@ -8892,7 +10639,7 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             src_font_size = int(0.8 * global_font_size)
             dst_font_size = global_font_size
 
-            if len(stroke_cnts) >= 10 and refer_h >= dot_line_h:
+            if text_direction == 'Horizontal' and len(stroke_cnts) >= 10 and refer_h >= dot_line_h:
                 src_font_size = int(refer_h)
                 dst_font_size = get_dst_font_size(src_font_size, bubble_color_str, letter_color_str)
 
@@ -8901,8 +10648,6 @@ def ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, m
             bubble_shape = '未知'
             if fulfill_ratio >= 0.95:
                 bubble_shape = '矩形'
-            text_direction = 'Horizontal'
-            text_alignment = 'Center'
             font_name = global_font_name
             if bubble_shape == '矩形' and global_rec_font_name:
                 font_name = global_rec_font_name
@@ -9081,434 +10826,42 @@ def stitch_imgs(input_imgs, bg_color='B'):
     return stitched_img
 
 
-# ================图形化参数================
-@logger.catch
-def cal_paras(hori_proj_bi_inv, upper, lower):
-    row_segment = hori_proj_bi_inv[int(upper):int(lower), :]
-    # 每行宽度
-    widths = np.sum(row_segment == 255, axis=1)
-    # 计算方差
-    vari = np.var(widths)
-    area = sum(widths)
-    avg_width = np.mean(widths)
-    logger.debug(f'{area=}, {len(widths)=}, {avg_width=:.2f}, {vari=:.2f}')
-    return area, widths, avg_width, vari
+def get_refer_dimension(stroke_cnts, dimension='width'):
+    threshold = dot_line_w if dimension == 'width' else dot_line_h
+    attr = 'br_w' if dimension == 'width' else 'br_h'
 
-
-def get_refer_h(stroke_cnts):
-    stroke_cnts_fit = [x for x in stroke_cnts if x.br_h >= dot_line_h]
+    # 过滤出符合条件的轮廓
+    stroke_cnts_fit = [x for x in stroke_cnts if getattr(x, attr) >= threshold]
     if not stroke_cnts_fit:
         stroke_cnts_fit = stroke_cnts
 
-    # ================估测基准行高================
-    # 实际行高大于基准行高
-    br_hs = [x.br_h for x in stroke_cnts_fit]
-    mean_h = mean(br_hs)
+    # 计算基准尺寸
+    dimensions = [getattr(x, attr) for x in stroke_cnts_fit]
+    mean_dim = mean(dimensions)
     if len(stroke_cnts_fit) >= 10:
         # 去掉10%的最大值
-        cutoff = percentile(br_hs, 90)
-        filtered_br_hs = [h for h in br_hs if h <= cutoff]
-        avg_h = mean(filtered_br_hs)
-        # 找出大于平均值的高度
-        greater_than_avg = [h for h in filtered_br_hs if h > avg_h]
+        cutoff = percentile(dimensions, 90)
+        filtered_dims = [d for d in dimensions if d <= cutoff]
+        avg_dim = mean(filtered_dims)
+        # 找出大于平均值的尺寸
+        greater_than_avg = [d for d in filtered_dims if d > avg_dim]
         if greater_than_avg:
             # 尝试找出众数，如果没有众数，则取中值
             modes = multimode(greater_than_avg)
-            refer_h = modes[0] if modes else median(greater_than_avg)
+            refer_dim = modes[0] if modes else median(greater_than_avg)
         else:
-            # 如果没有大于平均值的高度，使用过滤后的平均值
-            refer_h = avg_h
+            # 如果没有大于平均值的尺寸，使用过滤后的平均值
+            refer_dim = avg_dim
     else:
         # 如果数量小于10，直接取平均值
-        refer_h = mean(br_hs)
-    logger.warning(f'{len(stroke_cnts)=}, {mean_h=:.2f}, {refer_h=}')
-    return refer_h
+        refer_dim = mean_dim
+
+    logger.warning(f'{len(stroke_cnts)=}, {mean_dim=:.2f}, {refer_dim=}')
+    return refer_dim
 
 
 @logger.catch
-def get_line_proj_cnts(img_np, hori_proj_bi):
-    # ================图像参数================
-    nh, nw = img_np.shape[:2]  # 获取原始图像的尺寸
-    white_bg = ones((nh, nw, 3), dtype=uint8) * 255
-    black_bg = zeros((nh, nw), dtype=uint8)
-
-    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
-    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
-    ret, img_bi = threshold(img_gray, bi_thres, 255, THRESH_BINARY)
-    # 白色二值化文字
-    img_bi_inv = bitwise_not(img_bi)
-    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
-    # 将img_np中特别浅的部分变为白色
-    img_opt = img_gray.copy()
-    img_opt[img_opt >= white_thres] = 255
-
-    hori_proj_bi_np = array(hori_proj_bi)
-    hori_proj_bi_inv = bitwise_not(hori_proj_bi_np)
-
-    # ================笔画和原始投影轮廓================
-    stroke_contours, stroke_hier = findContours(img_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-    proj_contours_raw, raw_hier = findContours(hori_proj_bi_inv, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-
-    stroke_cnts = [Contr(x) for x in stroke_contours]
-    stroke_cnts = [x for x in stroke_cnts if x.area >= 1]
-    stroke_cnts.sort(key=lambda x: (x.br_x, x.br_y))
-
-    refer_h = get_refer_h(stroke_cnts)
-
-    # ================多行文本的最低高度================
-    line_multi_h_min = int(max(line_multi_h, 2 * refer_h - 1))
-
-    proj_cnts_raw = [Contr(x) for x in proj_contours_raw]
-    proj_cnts_raw.sort(key=lambda x: x.br_y)
-    proj_cnts_raw_ok = [x for x in proj_cnts_raw if x.area >= min_cnt_area]
-    br_hs = [x.br_h for x in proj_cnts_raw_ok]
-
-    # 示意图
-    proj_mask = hori_proj_bi_np.copy()
-
-    line_proj_cnts = []
-    if len(proj_cnts_raw) == 1 and not proj_cnts_raw_ok:
-        # ================短小的一行，只有一个符号（省略号之类）================
-        line_proj_cnts = deepcopy(proj_cnts_raw)
-    elif br_hs and max(br_hs) <= line_multi_h_min:
-        # ================行高均符合规则，不存在多行粘连================
-        line_proj_cnts = deepcopy(proj_cnts_raw)
-    else:
-        # ================可能存在多行粘连================
-        for p in range(len(proj_cnts_raw)):
-            proj_cnt_raw = proj_cnts_raw[p]
-            if proj_cnt_raw.br_h <= line_multi_h_min:
-                # ================单行================
-                line_proj_cnts.append(proj_cnt_raw)
-            else:
-                # ================多行================
-                sub_line_proj_cnts = []
-                logger.debug(f'{proj_cnt_raw=}, {proj_cnt_raw.avg_w=:.2f}')
-                upper = proj_cnt_raw.br_y
-                lower = proj_cnt_raw.br_v
-                upper_raw = deepcopy(upper)
-                lower_raw = deepcopy(lower)
-                area, widths, avg_width, vari = cal_paras(hori_proj_bi_inv, upper, lower)
-                area0, widths0, avg_width0, vari0 = cal_paras(hori_proj_bi_inv, upper, upper + refer_h)
-                area1, widths1, avg_width1, vari1 = cal_paras(hori_proj_bi_inv, lower - refer_h, lower)
-                # ================估测所需截断宽度================
-                if proj_cnt_raw.br_w <= 60:
-                    ratio = 0.12
-                elif proj_cnt_raw.br_w <= 120:
-                    ratio = 0.1
-                elif proj_cnt_raw.br_w <= 180:
-                    ratio = 0.08
-                elif proj_cnt_raw.br_w <= 240:
-                    ratio = 0.06
-                else:
-                    ratio = 0.04
-                line_edge = proj_cnt_raw.br_w * ratio
-                line_edge = clamp(line_edge, line_edge_min, line_edge_max)
-                line_edge = int(line_edge)
-                # ================仅对对话框优化================
-                if refer_h <= 20:
-                    if avg_width0 <= line_edge + 2:
-                        logger.error(f'{avg_width0=:.2f}, {line_edge=}, 首行过短')
-                        upper += refer_h
-                    if avg_width1 <= line_edge + 2:
-                        logger.error(f'{avg_width1=:.2f}, {line_edge=}, 尾行过短')
-                        lower -= refer_h
-                # ================涂黑白色轮廓中最右边line_edge像素宽================
-                hori_proj_roi = hori_proj_bi_inv.copy()
-                hori_proj_roi[:proj_cnt_raw.br_y - 1, :] = 0
-                hori_proj_roi[int(upper):int(lower), -line_edge:] = 0
-                hori_proj_roi[proj_cnt_raw.br_v + 1:, :] = 0
-
-                proj_contours_fit, fit_hier = findContours(hori_proj_roi, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-                proj_cnts_fit = [Contr(x) for x in proj_contours_fit]
-                proj_cnts_fit.sort(key=lambda x: x.br_y)
-                proj_cnts_fit_ok = [x for x in proj_cnts_fit if x.area >= min_cnt_area]
-                logger.warning(f'[{line_edge}]{len(proj_cnts_fit)=}, {len(proj_cnts_fit_ok)=}')
-
-                if len(proj_cnts_fit) <= 2 and len(proj_cnts_fit_ok) < 2:
-                    # 切分不成功，可能不是粘连
-                    sub_line_proj_cnts.append(proj_cnt_raw)
-                else:
-                    # 多个文本行粘连切分成功
-                    split_lines = []
-                    for f in range(len(proj_cnts_fit_ok) - 1):
-                        cnt_fit = proj_cnts_fit_ok[f]
-                        cnt_fit_next = proj_cnts_fit_ok[f + 1]
-                        # 切割线应该在白色区域的最小值处
-                        start_y = cnt_fit.br_v
-                        end_y = cnt_fit_next.br_y
-                        row_segment = hori_proj_bi_inv[start_y:end_y, :]
-                        white_px_count = np.sum(row_segment == 255, axis=1)
-                        if len(white_px_count) > 0:
-                            split_line = argmin(white_px_count)
-                        else:
-                            split_line = 0
-                        split_line += start_y
-                        split_lines.append(split_line)
-                    all_lines = [proj_cnts_fit_ok[0].br_y - 1] + split_lines + [proj_cnts_fit_ok[-1].br_v + 1]
-                    # ================建立基准行================
-                    for a in range(len(all_lines) - 1):
-                        start_line = all_lines[a]
-                        end_line = all_lines[a + 1]
-                        proj_roi_line = hori_proj_bi_inv.copy()
-                        if a == 0:
-                            # 有粘连的行的第一个
-                            proj_roi_line[:start_line - 1, :] = 0
-                        else:
-                            proj_roi_line[:start_line, :] = 0
-                        if a == len(all_lines) - 1:
-                            # 有粘连的行的最后一个
-                            proj_roi_line[end_line + 1:, :] = 0
-                        else:
-                            proj_roi_line[end_line:, :] = 0
-
-                        contours_line, line_hier = findContours(proj_roi_line, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-                        cnts_line = [Contr(x) for x in contours_line]
-                        cnts_line.sort(key=lambda x: x.br_y)
-                        cnts_line_ok = [x for x in cnts_line if x.area >= min_cnt_area]
-                        if cnts_line_ok:
-                            line_proj_cnt = cnts_line_ok[0]
-                        else:  # if cnts_line:
-                            line_proj_cnt = cnts_line[0]
-                        sub_line_proj_cnts.append(line_proj_cnt)
-
-                # 示意图
-                proj_mask[int(upper):int(lower), -line_edge:] = 127
-                line_proj_cnts.extend(sub_line_proj_cnts)
-
-    # ================处理只有点的文本行================
-    if len(line_proj_cnts) >= 2:
-        # ================点在最后一行则不处理================
-        br_hs = [x.br_h for x in line_proj_cnts[:-1]]
-        min_br_h = min(br_hs)
-        if min_br_h <= dot_h:
-            # ================找出所有点型文本行================
-            dot_inds = []
-            ind = 0
-            while ind < len(line_proj_cnts) - 1:
-                line_proj_cnt = line_proj_cnts[ind]
-                if line_proj_cnt.br_h <= dot_h:
-                    dot_inds.append(ind)
-                ind += 1
-
-            # ================找出所有点型文本行================
-            new_line_proj_cnts = []
-            pin = 0
-            while pin < len(line_proj_cnts):
-                line_proj_cnt = line_proj_cnts[pin]
-                if pin in dot_inds:
-                    line_proj_cnt = line_proj_cnts[pin]
-                    line_proj_cnt_next = line_proj_cnts[pin + 1]
-                    # 涂白最右边1像素宽
-                    hori_proj_dot_roi = hori_proj_bi_inv.copy()
-                    hori_proj_dot_roi[:line_proj_cnt.br_y - 1, :] = 0
-                    hori_proj_dot_roi[line_proj_cnt.br_v:line_proj_cnt_next.br_y, -1:] = 255
-                    hori_proj_dot_roi[line_proj_cnt_next.br_v + 1:, :] = 0
-                    proj_dot_contours, proj_dot_hier = findContours(hori_proj_dot_roi, RETR_EXTERNAL,
-                                                                    CHAIN_APPROX_SIMPLE)
-                    proj_dot_cnts = [Contr(x) for x in proj_dot_contours]
-                    proj_dot_cnts.sort(key=lambda x: x.br_y)
-                    proj_dot_cnts_ok = [x for x in proj_dot_cnts if x.area >= min_cnt_area]
-                    if proj_dot_cnts_ok:
-                        alt_cnt = proj_dot_cnts_ok[0]
-                    else:  # if proj_dot_cnts
-                        alt_cnt = proj_dot_cnts[0]
-                    new_line_proj_cnts.append(alt_cnt)
-                elif pin - 1 in dot_inds:
-                    pass
-                else:
-                    new_line_proj_cnts.append(line_proj_cnt)
-                pin += 1
-            line_proj_cnts = new_line_proj_cnts
-
-    # ================添加文本行矩形================
-    for line_proj_cnt in line_proj_cnts:
-        line_proj_cnt.add_line_polygon(nw)
-
-    # ================进行高度筛选================
-    if len(line_proj_cnts) >= 2:
-        line_proj_cnts = [x for x in line_proj_cnts if x.br_h >= textline_h_min]
-
-    for l in range(len(stroke_cnts)):
-        # ================每个笔画轮廓================
-        stroke_cnt = stroke_cnts[l]
-        # 绘制stroke_cnt的遮罩
-        stroke_mask = drawContours(black_bg.copy(), [stroke_cnt.contour], -1, (255), FILLED)
-        # write_pic(stroke_jpg, stroke_mask)
-        overlap_ratios = []
-        for t in range(len(line_proj_cnts)):
-            # ================每个基准行================
-            line_proj_cnt = line_proj_cnts[t]
-            if stroke_cnt.polygon.intersects(line_proj_cnt.line_polygon):
-                # 获取交集区域
-                overlap = stroke_cnt.polygon.intersection(line_proj_cnt.line_polygon)
-                line_mask = rectangle(black_bg.copy(), line_proj_cnt.line_br_xy, line_proj_cnt.line_br_uv, (255),
-                                      FILLED)
-                # 创建交集遮罩
-                overlap_mask = bitwise_and(stroke_mask, line_mask)
-                # write_pic(overlap_jpg, overlap_mask)
-                # 计算两个区域的非白色像素数量
-                overlap_non_white_area = np.sum((img_opt[overlap_mask == 255] != 255).astype(int))
-                stroke_non_white_area = np.sum((img_opt[stroke_mask == 255] != 255).astype(int))
-                if stroke_non_white_area == 0:
-                    overlap_ratio = 0
-                else:
-                    overlap_ratio = overlap_non_white_area / stroke_non_white_area
-            else:
-                overlap_ratio = 0
-            overlap_ratios.append(overlap_ratio)
-
-        ind = overlap_ratios.index(max(overlap_ratios))
-        # logger.debug(f'[{ind}]{max(overlap_ratios)=}')
-        value_2nd, index_2nd = find_nth_largest(overlap_ratios, 2)
-        line_proj_cnt_1st = line_proj_cnts[ind]
-        # 笔画相对于行高的比例
-        h_ratio = stroke_cnt.br_h / line_proj_cnt_1st.br_h
-
-        if max(overlap_ratios) >= 0.75 and h_ratio <= 1.25:
-            belong = 'A'
-            # 绝大部分都在一个文本行内
-            line_proj_cnt_1st.add_stroke(stroke_cnt)
-        elif len(overlap_ratios) >= 2 and value_2nd >= 0.1:
-            logger.debug(f'{len(line_proj_cnts)=}, {len(overlap_ratios)=}')
-            belong = 'B'
-            # 找到与笔画重叠的文本行
-            overlapping_lines = [
-                line_proj_cnts[ind],
-                line_proj_cnts[index_2nd],
-            ]
-            for line_proj_cnt in overlapping_lines:
-                # 创建新的交集遮罩
-                line_mask = rectangle(black_bg.copy(), line_proj_cnt.line_br_xy, line_proj_cnt.line_br_uv, (255),
-                                      FILLED)
-                intersected_mask = bitwise_and(stroke_mask, line_mask)
-                # 创建新的笔画轮廓
-                sub_stroke_contours, sub_stroke_hier = findContours(intersected_mask, RETR_EXTERNAL,
-                                                                    CHAIN_APPROX_SIMPLE)
-                sub_stroke_cnts = [Contr(x) for x in sub_stroke_contours]
-                sub_stroke_cnts = [x for x in sub_stroke_cnts if x.area >= 1]
-                for stroke_cnt in sub_stroke_cnts:
-                    line_proj_cnt.add_stroke(stroke_cnt)
-        elif max(overlap_ratios) >= 0.01:
-            belong = 'C'
-            line_proj_cnt_1st.add_stroke(stroke_cnt)
-        else:
-            belong = 'D'
-            # 无归属且无重叠面积则归于最近的line_proj_cnt
-            nearest_line_proj_cnt = min(line_proj_cnts, key=lambda cnt: abs(cnt.br_y - stroke_cnt.br_y))
-            nearest_line_proj_cnt.add_stroke(stroke_cnt)
-
-        imes = f'[{l}]{belong}[{len(line_proj_cnts)}行之{ind + 1}]{max(overlap_ratios)=:.2f}, {h_ratio=:.2f}'
-        if len(overlap_ratios) >= 2:
-            imes += f', {value_2nd=}, {index_2nd=}'
-    if not line_proj_cnts:
-        hori_proj_bi_png = current_dir / 'hori_proj_bi.png'
-        img_np_png = current_dir / 'img_np.png'
-        write_pic(hori_proj_bi_png, hori_proj_bi)
-        write_pic(img_np_png, img_np)
-    return line_proj_cnts, proj_mask
-
-
-@logger.catch
-def draw_line_proj_cnts(img_np, line_proj_cnts):
-    ih, iw = img_np.shape[0:2]
-    black_bg = zeros((ih, iw), dtype=uint8)
-
-    img_pil = fromarray(cvtColor(img_np, COLOR_BGR2RGB))
-    img_gray = cvtColor(img_np, COLOR_BGR2GRAY)
-    ret, img_bi = threshold(img_gray, bi_thres, 255, THRESH_BINARY)
-    # 白色二值化文字
-    img_bi_inv = bitwise_not(img_bi)
-    img_bi_pil = fromarray(cvtColor(img_bi, COLOR_BGR2RGB))
-    # 将img_np中特别浅的部分变为白色
-    img_opt = img_gray.copy()
-    img_opt[img_opt >= white_thres] = 255
-
-    # ================绘制示意图的彩色文本行边框================
-    img_w_lines = deepcopy(img_pil)
-    lines_draw = ImageDraw.Draw(img_w_lines, 'RGBA')
-    for p in range(len(line_proj_cnts)):
-        cnt = line_proj_cnts[p]
-        start_y = cnt.br_y
-        end_y = cnt.br_v
-        row_segment = img_bi[start_y:end_y + 1, :]
-        if np.any(row_segment == 0):
-            left = np.min(where(row_segment == 0)[1])
-            right = np.max(where(row_segment == 0)[1])
-            color = colormap_tab20(p % 20)[:3]
-            color_rgb = tuple(int(c * 255) for c in color)
-            color_rgba = color_rgb + (200,)
-            lines_draw.rectangle([(left, start_y), (right, end_y)], outline=color_rgba)
-
-    # ================获取每行文本对应的笔画轮廓================
-    line_binarys = []
-    for t in range(len(line_proj_cnts)):
-        line_proj_cnt = line_proj_cnts[t]
-        contours = [x.contour for x in line_proj_cnt.strokes]
-        # line_binary = drawContours(black_bg.copy(), contours, -1, 255, FILLED)
-        # 初始化一个黑色背景
-        combined_mask = black_bg.copy()
-        # 对每个轮廓单独绘制
-        for contour in contours:
-            mask = black_bg.copy()  # 每个轮廓都用一个新的遮罩
-            drawContours(mask, [contour], -1, 255, FILLED)  # 绘制轮廓
-            combined_mask = bitwise_or(combined_mask, mask)  # 将当前轮廓的遮罩合并到总遮罩上
-        line_binary = combined_mask
-        # 最终的遮罩将所有轮廓合并，即使有重叠，重叠部分也是白色
-        line_binarys.append(line_binary)
-
-    # ================获取未归属区域================
-    mask_belong = black_bg.copy()
-    # 叠加所有文本行的掩模
-    for line_binary in line_binarys:
-        mask_belong = maximum(mask_belong, line_binary)
-    mask_unbelong = bitwise_not(mask_belong)
-
-    # ================计算周边区域归属并更新未归属区域================
-    line_binary_borders = []
-    for l in range(len(line_binarys)):
-        line_binary = line_binarys[l]
-        line_binary_d3 = dilate(line_binary, kernel3, iterations=1)
-        line_binary_border = bitwise_and(line_binary_d3, mask_unbelong)
-        line_binary_borders.append(line_binary_border)
-        # 更新 mask_unbelong 以去掉已归属的边界区域
-        mask_unbelong = bitwise_and(mask_unbelong, bitwise_not(line_binary_border))
-
-    # ================将未归属区域按基准矩形分配到每个文本行================
-    real_masks = []
-    textline_imgs = []
-    for t in range(len(line_proj_cnts)):
-        line_proj_cnt = line_proj_cnts[t]
-        line_binary = line_binarys[t]
-        line_binary_border = line_binary_borders[t]
-        # 创建每一行文本的基准矩形掩模
-        line_belong_mask = zeros_like(img_bi, dtype=uint8)
-        x, y, w, h = line_proj_cnt.line_br
-        line_belong_mask[y:y + h, x:x + w] = 255
-        # 将基准矩形掩模与mask_unbelong重叠的部分视为每一行的真正区域
-        line_belong_mask = minimum(line_belong_mask, mask_unbelong)
-        # 每一行的真正掩模为 line_binary 加上 line_binary_border 加上 line_belong_mask
-        real_mask = maximum(maximum(line_binary, line_binary_border), line_belong_mask)
-        real_masks.append(real_mask)
-
-        # ================获取每一行真正掩模对应的非白色像素区域================
-        textline_imgs = []
-        for real_mask in real_masks:
-            # 创建一个白色背景图像
-            textline_img = ones_like(img_opt) * 255
-            # 从原始灰度图像提取非白色像素，并放置在白色背景图像上
-            textline_img[real_mask == 255] = img_opt[real_mask == 255]
-            textline_imgs.append(textline_img)
-
-    # ================制作最终效果图================
-    stitched_bi_img = stitch_imgs(line_binarys, 'B')
-    gray_limg = stitch_imgs(textline_imgs, 'W')
-    # gray_limg = stitch_imgs_normal(textline_imgs)
-    return img_w_lines, stitched_bi_img, gray_limg
-
-
-@logger.catch
-def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
+def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind, media_type):
     logger.warning(f'[{page_ind=}]{bubble_ind=}')
     auto_subdir = Auto / img_folder.name
 
@@ -9546,154 +10899,159 @@ def process_para(ocr_doc, img_folder, pic_result, img_np, page_ind, bubble_ind):
     char_area_dict, word_actual_areas_dict = {}, {}
     if color_locate in area_dic:
         char_area_dict, word_actual_areas_dict = area_dic[color_locate]
-    # ================黑字或白字强制使用白底黑字================
-    # if letter_color_str in ['000000', 'ffffff'] and 'ffffff-000000' in area_dic:
-    #     char_area_dict, word_actual_areas_dict = area_dic['ffffff-000000']
+    elif letter_color_str in ['000000', 'ffffff'] and 'ffffff-000000' in area_dic:
+        # ================黑字或白字强制使用白底黑字================
+        char_area_dict, word_actual_areas_dict = area_dic['ffffff-000000']
 
     # ================添加段落================
     new_para = ocr_doc.add_paragraph()
     # ================气泡数据================
     new_run = new_para.add_run(bubble_meta_str)
     new_run = new_para.add_run(lf)  # 软换行
-    # ================每一个对话框================
-    line_infos = get_line_infos(tess_zdata, img_np)
 
-    run_infos = []
-    if len(vision_lines) == len(line_infos):
-        # 行数相等时
-        for l in range(len(line_infos)):
-            # 每一行
-            word_imgs = line_infos[l]
-            ocr_line = vision_lines[l]
-            tess_words = [x[0] for x in word_imgs]
-            line_words = ocr_line.split(' ')
-            # ================如果词数有差异则进行修正================
-            if len(tess_words) != len(line_words):
-                new_line_words = []
-                for l in range(len(line_words)):
-                    line_word = line_words[l]
-                    if '…' in line_word:
-                        a, par, b = line_word.partition('…')
-                        new_line_words.append(f'{a}{par}')
-                        new_line_words.append(b)
-                    else:
-                        new_line_words.append(line_word)
-                line_words = new_line_words
+    if text_direction == 'Horizontal':
+        # ================每一个对话框================
+        line_infos = get_line_infos(tess_zdata, img_np)
 
-            # ================词数相等时================
-            if len(word_imgs) == len(line_words):
-                for w in range(len(word_imgs)):
-                    # 每一词
-                    pos_meta = word_imgs[w]
-                    line_word = line_words[w]
-                    # text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
-                    word_img = pos_meta[-1]
-
-                    # 检查图像的维度
-                    if word_img.shape[0] == 0 or word_img.shape[1] == 0:
-                        logger.error(f'图片错误: {line_word}')
-                        logger.error(f'{pos_meta[:-1]=}')
-                        continue
-
-                    # 计算裁剪出的单词图片的黑色像素面积
-                    # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
-                    if isinstance(word_img, ndarray):
-                        word_img = fromarray(word_img)
-                    # 转换为灰度图像
-                    gray_img = word_img.convert('L')
-                    # 转换为二值图像
-                    binary_img = gray_img.point(lambda x: 0 if x <= bit_thres else 255, '1')
-                    # 计算黑色像素的数量（假设黑色像素的值为0）
-                    black_px_area = binary_img.histogram()[0]
-                    pchars = [char for char in line_word if char in char_area_dict]
-                    npchars = [char for char in line_word if char not in char_area_dict]
-                    run_info = (line_word, '')
-                    if italic_color_locates and color_locate in italic_color_locates:
-                        run_info = (line_word, 'i')
-                    elif bubble_shape == '矩形' and rec2italic:
-                        run_info = (line_word, 'i')
-                    # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
-                    line_word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', line_word)
-                    if not npchars or len(npchars) / len(line_word) <= 0.2:
-                        if line_word in word_actual_areas_dict:
-                            word_actual_areas = word_actual_areas_dict[line_word]
-                            expect_area = sum(word_actual_areas) / len(word_actual_areas)
+        run_infos = []
+        if len(vision_lines) == len(line_infos):
+            # 行数相等时
+            for l in range(len(line_infos)):
+                # 每一行
+                word_imgs = line_infos[l]
+                ocr_line = vision_lines[l]
+                tess_words = [x[0] for x in word_imgs]
+                line_words = ocr_line.split(' ')
+                # ================如果词数有差异则进行修正================
+                if len(tess_words) != len(line_words):
+                    new_line_words = []
+                    for l in range(len(line_words)):
+                        line_word = line_words[l]
+                        if '…' in line_word:
+                            a, par, b = line_word.partition('…')
+                            new_line_words.append(f'{a}{par}')
+                            new_line_words.append(b)
                         else:
-                            exp_areas = []
-                            for char in line_word:
-                                # 移除重音符号
-                                normalized_char = normalize('NFD', char).encode('ascii', 'ignore').decode('utf-8')
-                                if char in char_area_dict:
-                                    # 如果字符在字典中，直接使用其面积
-                                    exp_area = char_area_dict[char]
-                                else:
-                                    # 如果标准化后的字符在字典中，使用其面积
-                                    if normalized_char in char_area_dict:
-                                        exp_area = char_area_dict[normalized_char]
-                                    elif char.lower() in char_area_dict:
-                                        exp_area = char_area_dict[char.lower()]
+                            new_line_words.append(line_word)
+                    line_words = new_line_words
+
+                # ================词数相等时================
+                if len(word_imgs) == len(line_words):
+                    for w in range(len(word_imgs)):
+                        # 每一词
+                        pos_meta = word_imgs[w]
+                        line_word = line_words[w]
+                        # text, par_num, line_num, word_num, left, top, width, height, conf, word_img = pos_meta
+                        word_img = pos_meta[-1]
+
+                        # 检查图像的维度
+                        if word_img.shape[0] == 0 or word_img.shape[1] == 0:
+                            logger.error(f'图片错误: {line_word}')
+                            logger.error(f'{pos_meta[:-1]=}')
+                            continue
+
+                        # 计算裁剪出的单词图片的黑色像素面积
+                        # 检查是否为 NumPy 数组，如果是，将其转换为 PIL 图像
+                        if isinstance(word_img, ndarray):
+                            word_img = fromarray(word_img)
+                        # 转换为灰度图像
+                        gray_img = word_img.convert('L')
+                        # 转换为二值图像
+                        binary_img = gray_img.point(lambda x: 0 if x <= bit_thres else 255, '1')
+                        # 计算黑色像素的数量（假设黑色像素的值为0）
+                        black_px_area = binary_img.histogram()[0]
+                        pchars = [char for char in line_word if char in char_area_dict]
+                        npchars = [char for char in line_word if char not in char_area_dict]
+                        run_info = (line_word, '')
+                        if italic_color_locates and color_locate in italic_color_locates:
+                            run_info = (line_word, 'i')
+                        elif bubble_shape == '矩形' and rec2italic:
+                            run_info = (line_word, 'i')
+                        # 使用正则表达式对line_word进行处理，匹配前面有字母或者后面有字母的"I"
+                        line_word = sub(r'(?<=[a-zA-Z])I|I(?=[a-zA-Z])', '|', line_word)
+                        if not npchars or len(npchars) / len(line_word) <= 0.2:
+                            if line_word in word_actual_areas_dict:
+                                word_actual_areas = word_actual_areas_dict[line_word]
+                                expect_area = sum(word_actual_areas) / len(word_actual_areas)
+                            else:
+                                exp_areas = []
+                                for char in line_word:
+                                    # 移除重音符号
+                                    normalized_char = normalize('NFD', char).encode('ascii', 'ignore').decode('utf-8')
+                                    if char in char_area_dict:
+                                        # 如果字符在字典中，直接使用其面积
+                                        exp_area = char_area_dict[char]
                                     else:
-                                        logger.warning(f'{char=}')
-                                        exp_area = 5
-                                exp_areas.append(exp_area)
-                            expect_area = sum(exp_areas)
-                        if expect_area == 0:
-                            logger.warning(f'{expect_area=}')
+                                        # 如果标准化后的字符在字典中，使用其面积
+                                        if normalized_char in char_area_dict:
+                                            exp_area = char_area_dict[normalized_char]
+                                        elif char.lower() in char_area_dict:
+                                            exp_area = char_area_dict[char.lower()]
+                                        else:
+                                            logger.warning(f'{char=}')
+                                            exp_area = 5
+                                    exp_areas.append(exp_area)
+                                expect_area = sum(exp_areas)
+                            if expect_area == 0:
+                                logger.warning(f'{expect_area=}')
+                            else:
+                                refer_ratio = black_px_area / expect_area
+                                if refer_ratio >= bold_thres:
+                                    logger.warning(f'[{refer_ratio:.2f}]{line_word}')
+                                    run_info = (line_word, 'bi')
                         else:
-                            refer_ratio = black_px_area / expect_area
-                            if refer_ratio >= bold_thres:
-                                logger.warning(f'[{refer_ratio:.2f}]{line_word}')
-                                run_info = (line_word, 'bi')
-                    else:
-                        imes = f'[{line_word}]'
-                        if pchars and npchars:
-                            imes += f'{pchars=}, {npchars=}'
-                        elif pchars and not npchars:
-                            imes += f'{pchars=}'
-                        elif not pchars:
-                            imes += f'{npchars=}'
-                        logger.error(imes)
-                    run_infos.append(run_info)
-                    if w != len(word_imgs) - 1:
-                        # 如果不是最后一词就添加空格
-                        run_info = (' ', '')
+                            if media_type in ['Comic']:
+                                imes = f'[{line_word}]'
+                                if pchars and npchars:
+                                    imes += f'{pchars=}, {npchars=}'
+                                elif pchars and not npchars:
+                                    imes += f'{pchars=}'
+                                elif not pchars:
+                                    imes += f'{npchars=}'
+                                logger.error(imes)
                         run_infos.append(run_info)
-            else:
-                run_info = (ocr_line, '')
-                run_infos.append(run_info)
-                logger.error(f'词数不相等,{tess_words=},{line_words=}')
-            if l != len(line_infos) - 1:
-                # 如果不是最后一行就添加换行
-                run_info = (lf, '')
-                run_infos.append(run_info)
-    else:
-        run_info = (vision_fmt_text, '')
-        run_infos.append(run_info)
-        logger.error(f'行数不相等, [{len(vision_lines)}-{len(line_infos)}]')
-        logger.error(f'{vision_fmt_text}')
-        for l in range(len(line_infos)):
-            word_imgs = line_infos[l]
-            words = [x[0] for x in word_imgs]
-            logger.debug(f'{words=}')
+                        if w != len(word_imgs) - 1:
+                            # 如果不是最后一词就添加空格
+                            run_info = (' ', '')
+                            run_infos.append(run_info)
+                else:
+                    run_info = (ocr_line, '')
+                    run_infos.append(run_info)
+                    logger.error(f'词数不相等,{tess_words=},{line_words=}')
+                if l != len(line_infos) - 1:
+                    # 如果不是最后一行就添加换行
+                    run_info = (lf, '')
+                    run_infos.append(run_info)
+        else:
+            run_info = (vision_fmt_text, '')
+            run_infos.append(run_info)
+            logger.error(f'行数不相等, [{len(vision_lines)}-{len(line_infos)}]')
+            logger.error(f'{vision_fmt_text}')
+            for l in range(len(line_infos)):
+                word_imgs = line_infos[l]
+                words = [x[0] for x in word_imgs]
+                logger.debug(f'{words=}')
 
-    for r in range(len(run_infos)):
-        run_info = run_infos[r]
-        line_word, form = run_info
-        if line_word not in [' ', lf]:
-            logger.debug(f'[{line_word}]')
-        line_word = line_word.replace('|', 'I')
-        line_word = line_word.replace('—', '-')
-        new_run = new_para.add_run(line_word)
-        if 'b' in form:
-            new_run.bold = True
-        if 'i' in form:
-            new_run.italic = True
+        for r in range(len(run_infos)):
+            run_info = run_infos[r]
+            line_word, form = run_info
+            if line_word not in [' ', lf]:
+                logger.debug(f'[{line_word}]')
+            line_word = line_word.replace('|', 'I')
+            line_word = line_word.replace('—', '-')
+            new_run = new_para.add_run(line_word)
+            if 'b' in form:
+                new_run.bold = True
+            if 'i' in form:
+                new_run.italic = True
+    else:
+        new_run = new_para.add_run(vision_fmt_text)  # 软换行
     ocr_doc.add_paragraph('')
     return ocr_doc
 
 
 @logger.catch
-def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
+def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list, media_type):
     ocr_yml = img_folder.parent / f'{img_folder.name}-文字识别.yml'
     ocr_data = iload_data(ocr_yml)
     # 示例单词，长度为34
@@ -9728,14 +11086,14 @@ def update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list):
                 img_pil = fromarray(img_np)
                 all_cropped_imgs.append(img_pil)
                 # 获取图片的dpi，如果没有dpi信息，则使用默认值
-                img_dpi = img_pil.info.get('dpi', (default_dpi, default_dpi))[0]
+                img_dpi = img_pil.info.get('dpi', (custom_dpi, custom_dpi))[0]
                 pic_width_inches = img_pil.width / img_dpi
                 with BytesIO() as temp_buffer:
                     img_pil.save(temp_buffer, format=docx_img_format.upper())
                     temp_buffer.seek(0)
                     ocr_doc.add_picture(temp_buffer, width=Inches(pic_width_inches))
             elif result_type == 'paragraph':
-                ocr_doc = process_para(ocr_doc, img_folder, pic_result, cur_img_np, page_ind, bubble_ind)
+                ocr_doc = process_para(ocr_doc, img_folder, pic_result, cur_img_np, page_ind, bubble_ind, media_type)
                 bubble_ind += 1
         write_yml(ocr_yml, ocr_data)
         # ================生成并保存长图================
@@ -9890,41 +11248,20 @@ def step3_OCR(img_folder, media_type, media_lang, vert):
 
     ocr_doc = Document()
     for page_ind, pic_results in enumerate(all_pic_results):
-        ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list)
+        ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, page_ind, img_list, media_type)
     return ocr_doc
 
 
-@timer_decorator
-def create_index_dict(file_stems, full_paragraphs, html_format=False):
-    """根据图片文件名（不包括扩展名）和段落列表创建索引字典和索引列表"""
-    index_dict = {}
-    last_ind = 0
-    indexes = []
-    for i, stem in enumerate(file_stems):
-        formatted_stem = f'<p>{stem}</p>' if html_format else stem
-        if formatted_stem in full_paragraphs[last_ind:]:
-            ind = full_paragraphs[last_ind:].index(formatted_stem) + last_ind
-            index_dict[formatted_stem] = ind
-            indexes.append(ind)
-            last_ind = ind
-    indexes.append(len(full_paragraphs))
-    return index_dict, indexes
-
-
-@timer_decorator
-def create_para_dic(file_stems, index_dict, indexes, lines, html_format=False):
-    """根据图片文件名、索引字典、索引列表和行列表创建段落字典"""
-    pin = 0
-    para_dic = {}
-    for stem in file_stems:
-        formatted_stem = f'<p>{stem}</p>' if html_format else stem
-        if formatted_stem in index_dict:
-            start_i = indexes[pin] + 1
-            end_i = indexes[pin + 1]
-            pin += 1
-            stem_text_list = lines[start_i:end_i]
-            para_dic[formatted_stem] = stem_text_list
-    return para_dic
+def get_formatted_stem(file_stem, format='txt'):
+    if format == 'doc':
+        formatted_stem = file_stem
+    elif format == 'html':
+        formatted_stem = f'<p>{file_stem}</p>'
+    else:  # format == 'txt':
+        formatted_stem = f'>>>>>>>>[{file_stem.name}]<<<<<<<<'
+    formatted_stem = normalize('NFC', formatted_stem)
+    # logger.debug(f'{formatted_stem=}')
+    return formatted_stem
 
 
 @logger.catch
@@ -9945,7 +11282,7 @@ def get_para_text_line(valid_para_lines):
         # 将每句话首字母大写
         single_line_text = ' '.join(valid_para_lines)
         # 将文本分割成句子并保留句末标点符号
-        sentence_parts = re.split(r'( *[.?!…]+[\'")\]，。？！]* *)', single_line_text)
+        sentence_parts = split(r'( *[.?!…]+[\'")\]，。？！]* *)', single_line_text)
         if do_cap:
             # 对每个句子进行首字母大写处理
             format_parts = [x.capitalize() for x in sentence_parts]
@@ -9956,6 +11293,19 @@ def get_para_text_line(valid_para_lines):
     else:
         para_text_line = ''.join(valid_para_lines)
     return para_text_line
+
+
+@logger.catch
+def copy_run(run, new_run, format=True):
+    new_run.font.size = run.font.size
+    new_run.font.name = run.font.name
+    if format:
+        new_run.bold = run.bold
+        new_run.italic = run.italic
+        new_run.underline = run.underline
+        new_run.font.strike = run.font.strike
+        new_run.font.highlight_color = run.font.highlight_color
+        new_run.font.color.rgb = run.font.color.rgb
 
 
 @timer_decorator
@@ -10082,12 +11432,7 @@ def step4_readable(img_folder):
             new_para = readable_doc.add_paragraph()
             for new_run_text, run, format_code in zip(merged_runs_text, merged_runs_format, merged_format_codes):
                 new_run = new_para.add_run(new_run_text)
-                new_run.bold = run.bold
-                new_run.italic = run.italic
-                new_run.underline = run.underline
-                new_run.font.strike = run.font.strike
-                new_run.font.highlight_color = run.font.highlight_color
-                new_run.font.color.rgb = run.font.color.rgb
+                copy_run(run, new_run)
     write_docx(read_docx, readable_doc)
     logger.warning(f'{read_docx=}')
 
@@ -10163,7 +11508,7 @@ def step4_readable(img_folder):
 
 # @logger.catch
 @timer_decorator
-def step5_google_translate(simple_lines, target_lang, strip_empty=True):
+def google_translate(simple_lines, target_lang, strip_empty=True):
     """
     将 .docx 文档翻译成指定的目标语言，并将翻译后的文本保存到一个 .txt 文件中。
 
@@ -10271,7 +11616,7 @@ def fill_textarea(browser, input_text, activate_browser=True, hit_enter=True):
 
 @timer_decorator
 @logger.catch
-def get_QA(browser, div_type='code'):
+def get_QA(browser, local_name=None, div_type='code'):
     """
     从当前浏览器中提取问答对，并进行格式化和清理。
 
@@ -10279,7 +11624,7 @@ def get_QA(browser, div_type='code'):
     :return: 包含已清理和格式化问答对的列表
     """
     # ================保存当前浏览器内容================
-    if read_local:
+    if local_name:
         chatgpt_html = ChatGPT / f'{local_name}.html'
     else:
         chatgpt_html = save_from_browser(browser)
@@ -10299,8 +11644,8 @@ def get_QA(browser, div_type='code'):
 
     # 查找并删除具有特定 class 的 <div> 标签
     extra_classes = [
-        'overflow-x-hidden',
-        'bottom-0',
+        'overflow-x-hidden',  # 历史聊天记录
+        'bottom-0',  # 侧边对话
     ]
     for extra_class in extra_classes:
         for div in soup.find_all('div', class_=extra_class):
@@ -10317,41 +11662,83 @@ def get_QA(browser, div_type='code'):
     target_tups = []
     # class_ = "min-h-[20px]"
     class_ = '[.text-message+&]:mt-5'
-    divs = simple_soup.find_all('div', class_=class_)
+    message_divs = simple_soup.find_all('div', class_=class_)
 
-    spec_str = '这张图片是来自漫画'
+    # 模型名称
+    class_ = "line-clamp-1 text-sm"
+    style = "opacity: 0; padding-left: 0px; width: 0px;"
+    model_spans = simple_soup.find_all('span', class_=class_, style=style)
+    # 打印找到的所有符合条件的<span>标签
+    model_names = []
+    for m in range(len(model_spans)):
+        model_span = model_spans[m]
+        model_name = model_span.get_text().strip()
+        model_names.append(model_name)
+
     handler_normal = HTML2Text()
     handler_no_link = HTML2Text()
     # 如果不需要处理Markdown中的链接可以设置为True
     handler_no_link.ignore_links = True
-    for div in divs:
-        raw_div_str = str(div)
+
+    model_i = 0
+    for m in range(len(message_divs)):
+        message_div = message_divs[m]
+        raw_div_str = str(message_div)
         # 根据文本特征判断发送者身份
-        if 'dark:prose-invert light' in raw_div_str:
-            text_role = 'chatGPT'
-        else:
+        if 'max-w-[70%]' in raw_div_str:
             text_role = '用户'
+            model_name = ''
+        else:
+            text_role = 'chatGPT'
+            if model_i < len(model_names):
+                model_name = model_names[model_i]
+                model_i += 1
+            else:
+                model_name = ''
 
         # 查找 code 标签
-        code_tag = div.find('code')
+        code_tag = message_div.find('code')
         if code_tag and div_type == 'code':
             # 如果找到 code 标签，提取其内容
             # 用于文稿翻译
             target_div = str(code_tag).strip()
         elif text_role == '用户':
             # 用户提问
-            target_div = div.get_text().strip()
+            # 查找所有的<code>标签
+            code_tags = message_div.find_all('code')
+            # 替换<code>标签内容，用反引号包围其文本
+            for code in code_tags:
+                code.string = f"`{code.get_text(strip=True)}`"
+            # 提取整个文档的文本，此时<code>中的文本已被修改
+            target_div = message_div.get_text(strip=True)
+
             # 提问转为Markdown
             target_md = handler_normal.handle(raw_div_str).strip()
-            if spec_str in target_md:
-                pic_part = target_md.split('这张图片是来自漫画')[0].strip()
+            if gpt4o_spec_str in target_md:
+                pic_part = target_md.split(gpt4o_spec_str)[0].strip()
                 target_div = f'{pic_part}{lf}{target_div}'
         else:
             # 回答转为Markdown
             target_div = handler_no_link.handle(raw_div_str).strip()
-        target_tup = (text_role, target_div)
+        target_tup = (text_role, model_name, target_div)
         target_tups.append(target_tup)
     return target_tups
+
+
+@logger.catch
+def get_target_tups(browser, div_type='code'):
+    all_target_tups = []
+    if read_local:
+        target_tups = get_QA(browser, local_name, div_type=div_type)
+    else:
+        target_tups = get_QA(browser, div_type=div_type)
+    all_target_tups.extend(target_tups)
+    if read_history:
+        for h in range(len(history_names)):
+            history_name = history_names[h]
+            target_tups = get_QA(browser, history_name, div_type=div_type)
+            all_target_tups.extend(target_tups)
+    return all_target_tups
 
 
 def get_split_lines(html_text):
@@ -10415,14 +11802,17 @@ def html2docx(html_text, new_para):
     for para in temp_doc.paragraphs:
         for run in para.runs:
             new_run = new_para.add_run(run.text)
-            new_run.bold = run.bold
-            new_run.italic = run.italic
-            new_run.underline = run.underline
-            new_run.font.size = run.font.size
-            new_run.font.name = run.font.name
+            copy_run(run, new_run)
 
     # 删除临时文件
     os.remove(temp_filename)
+
+
+def get_innermost_tag(tag):
+    """递归地获取最内层的标签"""
+    if tag.contents and isinstance(tag.contents[-1], Tag):
+        return get_innermost_tag(tag.contents[-1])
+    return tag
 
 
 # 将所有英文标点替换为对应的中文标点
@@ -10434,13 +11824,6 @@ punct_map = {
     # ':': '：',
     # ';': '；',
 }
-
-
-def get_innermost_tag(tag):
-    """递归地获取最内层的标签"""
-    if tag.contents and isinstance(tag.contents[-1], Tag):
-        return get_innermost_tag(tag.contents[-1])
-    return tag
 
 
 # @logger.catch
@@ -10553,10 +11936,18 @@ def str2dic(dic_str):
     return spec_dic
 
 
-gpt_user_str = """
-<p>“It would’ve solved <i>everything,</i>” she replies, her voice almost cracking, and for the first time, I realize that that night—that fucked-up, deeply <i>wrong</i> night—might have meant something different to her than it did to me.</p>
-<p>“这本该解决<i>一切问题，</i>”她回答，声音几乎要破裂，这是我第一次意识到，那个夜晚——那个混乱、深刻地<i>错误</i>的夜晚——对她来说可能意味着的东西和对我来说截然不同。</p>
-"""
+@logger.catch
+def get_code_text(user_html):
+    user_soup = BeautifulSoup(user_html, 'html.parser')
+    # 查找 code 标签
+    code_tag = user_soup.find('code')
+    if code_tag is None:
+        code_text = user_html
+    else:
+        code_text = code_tag.get_text().strip()
+    # 对文本内容进行反向转义
+    unescaped_text = unescape(code_text)
+    return code_text
 
 
 # @timer_decorator
@@ -10565,51 +11956,28 @@ def get_gpt_dic(target_tups):
     gpt_dic = {}
     gpt_dic_user = str2dic(gpt_user_str)
     gpt_dic.update(gpt_dic_user)
-    error_num = 0
-    display_mode = 'side_by_side'
-    display_mode = 'up_down'
-
     for t in range(len(target_tups) - 1):
         target_tup = target_tups[t]
         next_target_tup = target_tups[t + 1]
-        text_role, target_div = target_tup
-        next_text_role, next_target_div = next_target_tup
-        if text_role == '用户' and next_text_role == 'chatGPT' and target_div.startswith(prompt_prefix):
-            full_prompt = target_div
+        text_role, model_name, target_div = target_tup
+        next_text_role, next_model_name, next_target_div = next_target_tup
+        if text_role == '用户' and next_text_role == 'chatGPT':
+            user_html = target_div
             gpt_html = next_target_div
-            full_prompt_lines = full_prompt.splitlines()
-            if len(full_prompt_lines) >= 4 and full_prompt_lines[1].strip() == '```html':
-                input_text = lf.join(full_prompt_lines[2:])
-                input_text = input_text.split('```')[0].strip()
-                input_lines = input_text.splitlines()
-
-                gpt_soup = BeautifulSoup(gpt_html, 'html.parser')
-
-                # 查找 code 标签
-                code_tag = gpt_soup.find('code')
-                if code_tag is None:
-                    code_text = gpt_html
-                else:
-                    code_text = code_tag.get_text().strip()
-                # 对文本内容进行反向转义
-                unescaped_text = unescape(code_text)
-                output_lines = code_text.strip().splitlines()
-
+            if '<code' in user_html:
+                user_code_text = get_code_text(user_html)
+                gpt_code_text = get_code_text(gpt_html)
+                if user_code_text.startswith('html'):
+                    user_code_text = user_code_text.removeprefix('html').strip()
+                input_lines = user_code_text.strip().splitlines()
+                output_lines = gpt_code_text.strip().splitlines()
                 if len(input_lines) == len(output_lines) >= 1:
                     ilines = input_lines
                     olines = output_lines
-                else:
-                    ilines = []
-                    olines = []
-                    # logger.warning(f'{len(input_lines)=}, {len(output_lines)=}')
-                    # logger.warning(f'{input_text}')
-                    # logger.error(f'{code_text}')
-                    error_num += 1
-                    gpt_dic[input_text] = code_text
-                for c in range(len(ilines)):
-                    input_line = ilines[c]
-                    output_line = olines[c]
-                    gpt_dic[input_line] = output_line
+                    for c in range(len(ilines)):
+                        input_line = ilines[c]
+                        output_line = olines[c]
+                        gpt_dic[input_line] = output_line
     return gpt_dic
 
 
@@ -10634,7 +12002,7 @@ def step5_translate(img_folder):
         if not googletrans_txt.exists():
             # ================谷歌翻译================
             logger.debug('not googletrans_txt.exists()')
-            translated_text = step5_google_translate(simple_lines, target_lang)
+            translated_text = google_translate(simple_lines, target_lang)
             write_txt(googletrans_txt, translated_text)
         else:
             # 获取文件的修改时间
@@ -10643,7 +12011,7 @@ def step5_translate(img_folder):
             if read_html_mtime > googletrans_txt_mtime:
                 # ================如有更新则更新谷歌翻译================
                 logger.debug('read_html_mtime > googletrans_txt_mtime')
-                translated_text = step5_google_translate(simple_lines, target_lang)
+                translated_text = google_translate(simple_lines, target_lang)
                 write_txt(googletrans_txt, translated_text)
             else:
                 # ================否则进行GPT4翻译================
@@ -10652,7 +12020,7 @@ def step5_translate(img_folder):
                     read_html_text = read_txt(read_html)
                     roi_htmls = read_html_text.splitlines()
                     if SYSTEM in ['MAC', 'M1']:
-                        target_tups = get_QA(browser)
+                        target_tups = get_target_tups(browser)
                         gpt_dic = get_gpt_dic(target_tups)
                         # ================排除已经翻译的部分================
                         need2trans_lines = [x for x in roi_htmls if x not in gpt_dic]
@@ -10667,7 +12035,7 @@ def step5_translate(img_folder):
                             full_prompt = f'{prompt_prefix}{lf}```html{lf}{input_text}{lf}```'
                             possible_divs = [x for x in target_tups if x[0] == '用户' and full_prompt in x[-1]]
                             # ================尚未提问的段落================
-                            if not possible_divs:
+                            if not possible_divs:  # or True
                                 logger.warning(
                                     f'[{s + 1}/{len(split_lines)}], {len(input_lines)=}, {len(input_text)=}')
                                 logger.info(full_prompt)
@@ -10682,7 +12050,7 @@ def step5_translate(img_folder):
                                     sleep(stime)
                         logger.warning(f'chatGPT翻译完成, {len(split_lines)=}')
 
-                        target_tups = get_QA(browser)
+                        target_tups = get_target_tups(browser)
                         gpt_dic = get_gpt_dic(target_tups)
                         dst_lines = []
                         trans_len = 0
@@ -11071,12 +12439,12 @@ def warn_user(warn_str):
 @logger.catch
 def stepB_ask(img_folder):
     series4file = folder_name
-    M_issue_w_dot = p_issue_w_dot.match(folder_name)
+    m_issue_w_dot = p_issue_w_dot.match(folder_name)
     issue = ''
     logger.debug(f'{series4file=}')
-    if M_issue_w_dot:
-        series4file = M_issue_w_dot.group(1)
-        issue = M_issue_w_dot.group(2)
+    if m_issue_w_dot:
+        series4file = m_issue_w_dot.group(1)
+        issue = m_issue_w_dot.group(2)
         logger.debug(f'{issue=}')
 
     img_list = get_valid_imgs(img_folder)
@@ -11087,7 +12455,7 @@ def stepB_ask(img_folder):
     cpre = common_prefix(img_stems)
     csuf = common_suffix(img_stems)
 
-    target_tups = get_QA(browser, div_type='pic')
+    target_tups = get_target_tups(browser, div_type='pic')
     logger.debug(f'{len(target_tups)=}')
     question_tups = [x for x in target_tups if x[0] == '用户']
 
@@ -11294,7 +12662,7 @@ def stepC_conclude(img_folder):
     cpre = common_prefix(img_stems)
     csuf = common_suffix(img_stems)
 
-    target_tups = get_QA(browser, div_type='pic')
+    target_tups = get_target_tups(browser, div_type='pic')
     logger.debug(f'{len(target_tups)=}')
     question_tups = [x for x in target_tups if x[0] == '用户']
 
@@ -11323,6 +12691,8 @@ def stepC_conclude(img_folder):
     write_txt(desc_md, desc_text)
 
 
+@timer_decorator
+@logger.catch
 def stepD_fill(img_folder):
     img_list = get_valid_imgs(img_folder)
     roi_folder = img_folder / '成品'
@@ -11337,12 +12707,14 @@ def stepD_fill(img_folder):
             logger.warning(f'{img_file}->{pic_path1}')
 
 
+@timer_decorator
+@logger.catch
 def stepE_group(img_folder):
     series4file = folder_name
-    M_issue_w_dot = p_issue_w_dot.match(folder_name)
-    if M_issue_w_dot:
-        series4file = M_issue_w_dot.group(1)
-        issue = M_issue_w_dot.group(2)
+    m_issue_w_dot = p_issue_w_dot.match(folder_name)
+    if m_issue_w_dot:
+        series4file = m_issue_w_dot.group(1)
+        issue = m_issue_w_dot.group(2)
 
     logger.debug(f'{series4file=}')
     auto_group_dir = Auto / series4file
@@ -11375,14 +12747,18 @@ def folder_proc(img_folder, step_str, img_inds):
     cut_txt = img_folder.parent / f'{img_folder.name}-5断句.txt'
     lettering_txt = img_folder.parent / f'{img_folder.name}-6填字.txt'
     mark_txt = img_folder.parent / f'{img_folder.name}-7标记.txt'
+    lp_txt = img_folder.parent / f'{img_folder.name}-8萌翻.txt'
+    rlp_txt = img_folder.parent / f'{img_folder.name}翻译_0.txt'
     googletrans_txt = img_folder.parent / f'{img_folder.name}-9-api-谷歌翻译.txt'
+    chara_docx = img_folder.parent / f'{img_folder.name}-人物.docx'
+    chara_M_yml = img_folder.parent / f'{img_folder.name}-男.yml'
+    chara_F_yml = img_folder.parent / f'{img_folder.name}-女.yml'
 
     sd_img_folder = get_sd_img_folder(img_folder)
     sd_src_docx = img_folder.parent / f'{sd_img_folder.name}-2校对.docx'
 
     auto_subdir = Auto / img_folder.name
     make_dir(auto_subdir)
-    media_type = img_folder.parent.name.removesuffix('Process')
 
     img_list = get_valid_imgs(img_folder)
     img_stems = [x.stem for x in img_list]
@@ -11441,9 +12817,9 @@ if __name__ == "__main__":
     MangaProcess = MomoHanhua / 'MangaProcess'  # 日漫
     ManhuaProcess = MomoHanhua / 'ManhuaProcess'  # 国漫
     ManhwaProcess = MomoHanhua / 'ManhwaProcess'  # 韩漫
+    Storage = MomoHanhua / 'Storage'
 
     MomoYolo = DOCUMENTS / '默墨智能'
-    Storage = MomoYolo / 'Storage'
     ChatGPT = MomoYolo / 'ChatGPT'
 
     AutomateUserDataFolder = ProgramFolder / 'MomoAutomateUserData'
@@ -11472,9 +12848,9 @@ if __name__ == "__main__":
     make_dir(MangaProcess)
     make_dir(ManhuaProcess)
     make_dir(ManhwaProcess)
+    make_dir(Storage)
 
     make_dir(MomoYolo)
-    make_dir(Storage)
     make_dir(ChatGPT)
 
     date_str = strftime('%Y_%m_%d')
@@ -11531,7 +12907,14 @@ if __name__ == "__main__":
     read_local = True
     read_local = False
 
-    local_name = 'local_name'
+    read_history = True
+    read_history = False
+
+    history_names = []
+
+    local_name = ''
+
+    debug_dir = current_dir
 
     system_fonts = font_manager.findSystemFonts()
     system_font_dic = {}
@@ -11547,11 +12930,34 @@ if __name__ == "__main__":
     do_mode = app_config.config_data['do_mode']
     img_ind = app_config.config_data['img_ind']
     step_str = app_config.config_data['step_str']
+    media_type = app_config.config_data['media_type']
+    text_direction = app_config.config_data['text_direction']
+    if text_direction is None:
+        if media_type in ['Comic', 'Manhua', 'Manhwa']:
+            text_direction = 'Horizontal'
+        else:
+            text_direction = 'Vertical'
+    if text_direction == 'Horizontal':
+        text_alignment = 'Center'
+    else:  # text_direction == 'Vertical'
+        text_alignment = 'Left'
+    hit_enter = app_config.config_data['hit_enter']
+    use_pivot_split = app_config.config_data['use_pivot_split']
+    bbox_type = app_config.config_data['bbox_type']
+    better_data = app_config.config_data['better_data']
+    force_trad = app_config.config_data['force_trad']
+    punc_type = app_config.config_data['punc_type']
+    enable_lettering = app_config.config_data['enable_lettering']
     lettering_type = app_config.config_data['lettering_type']
+    default_chara = app_config.config_data['default_chara']
+    default_dpi = app_config.config_data['default_dpi']
+    custom_dpi = app_config.config_data['custom_dpi']
+    hide_extra = app_config.config_data['hide_extra']
+    print_type = app_config.config_data['print_type']
+    dist_thres = app_config.config_data['dist_thres']
     docx_img_format = app_config.config_data['docx_img_format']
     folder_name = app_config.config_data['folder_name']
     area_folder_names = app_config.config_data['area_folder_names']
-    default_dpi = app_config.config_data['default_dpi']
     WLB_ext_px_dic = app_config.config_data['WLB_ext_px_dic']
     WLB_ext_px = WLB_ext_px_dic['Comic']
     if ',' in str(WLB_ext_px):
@@ -11573,9 +12979,9 @@ if __name__ == "__main__":
     thumb_size = app_config.config_data['thumb_size']
     window_size = app_config.config_data['window_size']
     if ',' in str(window_size):
-        sizes = window_size.split(',')
-        sizes = [int(x) for x in sizes]
-        window_w, window_h = sizes
+        window_w, par, window_h = window_size.partition(',')
+        window_w = int(window_w)
+        window_h = int(window_h)
     else:
         window_w = window_h = window_size
     WBLDN_padding = app_config.config_data['WBLDN_padding']
@@ -11669,6 +13075,7 @@ if __name__ == "__main__":
     conf_thresh = bubble_condition['conf_thresh']
     mask_thresh = bubble_condition['mask_thresh']
     edge_px_count_range = bubble_condition['edge_px_count_range']
+    border_thickness_range = bubble_condition['border_thickness_range']
     letter_area_range = bubble_condition['letter_area_range']
     textblock_area_range = bubble_condition['textblock_area_range']
     textblock_wrange = bubble_condition['textblock_wrange']
@@ -11689,9 +13096,12 @@ if __name__ == "__main__":
     else:
         angle_step = px_step = angle_px_step
     textline_hrange = bubble_condition['textline_hrange']
+    textline_wrange = bubble_condition['textline_wrange']
     line_multi_h = bubble_condition['line_multi_h']
+    line_multi_w = bubble_condition['line_multi_w']
     line_edge_range = bubble_condition['line_edge_range']
     dot_line_h = bubble_condition['dot_line_h']
+    dot_line_w = bubble_condition['dot_line_w']
     dot_h = bubble_condition['dot_h']
     bulk_thres = bubble_condition['bulk_thres']
     overlap_ratio = bubble_condition['overlap_ratio']
@@ -11703,6 +13113,7 @@ if __name__ == "__main__":
     br_h_min, br_h_max = parse_range(br_h_range)
     br_wh_min, br_wh_max = parse_range(br_wh_range)
     br_wnh_min, br_wnh_max = parse_range(br_wnh_range)
+
     br_w_ratio_min, br_w_ratio_max = parse_range(br_w_rarange)
     br_h_ratio_min, br_h_ratio_max = parse_range(br_h_rarange)
     br_ratio_min, br_ratio_max = parse_range(br_rarange)
@@ -11717,6 +13128,7 @@ if __name__ == "__main__":
     BnL_px_ratio_min, BnL_px_ratio_max = parse_range(BnL_px_rarange)
     CTD_mask_px_ratio_min, CTD_mask_px_ratio_max = parse_range(CTD_mask_px_rarange)
     edge_px_count_min, edge_px_count_max = parse_range(edge_px_count_range)
+    border_thickness_min, border_thickness_max = parse_range(border_thickness_range)
     letter_area_min, letter_area_max = parse_range(letter_area_range)
     textblock_area_min, textblock_area_max = parse_range(textblock_area_range)
     textblock_wmin, textblock_wmax = parse_range(textblock_wrange)
@@ -11728,7 +13140,29 @@ if __name__ == "__main__":
     note_area_min, note_area_max = parse_range(note_area_range)
     seg_line_min, seg_line_max = parse_range(seg_line_range)
     textline_h_min, textline_h_max = parse_range(textline_hrange)
+    textline_w_min, textline_w_max = parse_range(textline_wrange)
     line_edge_min, line_edge_max = parse_range(line_edge_range)
+
+    # 根据 DPI 调整所有相关的尺寸参数
+    if custom_dpi != default_dpi:
+        br_w_min = int(br_w_min * custom_dpi / default_dpi)
+        br_w_max = int(br_w_max * custom_dpi / default_dpi)
+        br_h_min = int(br_h_min * custom_dpi / default_dpi)
+        br_h_max = int(br_h_max * custom_dpi / default_dpi)
+        br_wh_min = int(br_wh_min * custom_dpi / default_dpi)
+        br_wh_max = int(br_wh_max * custom_dpi / default_dpi)
+        br_wnh_min = int(br_wnh_min * custom_dpi / default_dpi)
+        br_wnh_max = int(br_wnh_max * custom_dpi / default_dpi)
+
+        textblock_wmin = int(textblock_wmin * custom_dpi / default_dpi)
+        textblock_wmax = int(textblock_wmax * custom_dpi / default_dpi)
+        textblock_hmin = int(textblock_hmin * custom_dpi / default_dpi)
+        textblock_hmax = int(textblock_hmax * custom_dpi / default_dpi)
+
+        bubble_px_min = int(bubble_px_min * custom_dpi ** 2 / default_dpi ** 2)
+        bubble_px_max = int(bubble_px_max * custom_dpi ** 2 / default_dpi ** 2)
+        letter_px_min = int(letter_px_min * custom_dpi ** 2 / default_dpi ** 2)
+        letter_px_max = int(letter_px_max * custom_dpi ** 2 / default_dpi ** 2)
 
     char_condition = app_config.config_data['char_condition']
     px_area_range = char_condition['px_area_range']
@@ -11762,6 +13196,7 @@ if __name__ == "__main__":
     rec_pad_h = bubble_recognize['rec_pad_h']
     rec_pad_w = bubble_recognize['rec_pad_w']
     sum_sect_max = bubble_recognize['sum_sect_max']
+    lower_ratio = bubble_recognize['lower_ratio']
 
     bubble_seg = app_config.config_data['bubble_seg']
     use_rec = bubble_seg['use_rec']
@@ -11772,12 +13207,6 @@ if __name__ == "__main__":
     check_intact = bubble_seg['check_intact']
     sort_by_y = bubble_seg['sort_by_y']
     sort_by_x = bubble_seg['sort_by_x']
-
-    hit_enter = app_config.config_data['hit_enter']
-    use_pivot_split = app_config.config_data['use_pivot_split']
-
-    bbox_type = app_config.config_data['bbox_type']
-    better_data = app_config.config_data['better_data']
 
     ocr_settings = app_config.config_data['ocr_settings']
     discard_ratio = ocr_settings['discard_ratio']
@@ -11823,7 +13252,17 @@ if __name__ == "__main__":
     italic_color_locates = app_config.config_data['italic_color_locates']
     color_pattern_dic = app_config.config_data['color_pattern_dic']
 
-    if lettering_type == '不朽':
+    if lettering_type == '332':
+        global_font_size = 30
+        global_font_name = '方正兰亭准黑'
+        ellipsis_type = '...'
+        punc_type = 'simple'
+        font_size_range_dic = {
+            'default': '30~30',
+            'ffffff-000000': '30~30',
+            '000000-6ac7cf': '35~35',
+        }
+    elif lettering_type == '不朽':
         global_font_size = 28
         global_font_name = '思源黑体'
         ellipsis_type = '...'
@@ -11845,14 +13284,26 @@ if __name__ == "__main__":
             'ffffff-000000': '20~20',
         }
         single_width_min = 1900
-        default_dpi = 96
+        custom_dpi = 96
     elif lettering_type == 'HD':
         global_font_size = 40
         font_size_range_dic = {
             'default': '40~40',
         }
         single_width_min = 3200
-        default_dpi = 200
+        custom_dpi = 200
+    elif media_type in ['Manga']:
+        punc_type = 'none'
+        global_font_name = '華康儷中黑'
+        global_font_size = 40
+        font_size_range_dic = {
+            'default': '40~60',
+        }
+
+        global_font_size = 80
+        font_size_range_dic = {
+            'default': '80~120',
+        }
 
     font_size_min, font_size_max = parse_range(font_size_range_dic['default'])
     font_size_rarange = app_config.config_data['font_size_rarange']
@@ -11873,15 +13324,11 @@ if __name__ == "__main__":
     for dmode in mode_list:
         globals()[dmode] = (do_mode == dmode)
 
-    ProcessDir = ComicProcess
-    # ProcessDir = MangaProcess
-    # ProcessDir = ManhuaProcess
-    # ProcessDir = ManhwaProcess
+    ProcessDir = MomoHanhua / f'{media_type}Process'
     img_folder = ProcessDir / folder_name
 
     auto_subdir = Auto / img_folder.name
     make_dir(auto_subdir)
-    media_type = ProcessDir.name.removesuffix('Process')
 
     if media_type in WLB_ext_px_dic:
         WLB_ext_px = WLB_ext_px_dic[media_type]
@@ -11927,10 +13374,10 @@ if __name__ == "__main__":
 
     # ================获取漫画名================
     series4file = folder_name
-    M_issue_w_dot = p_issue_w_dot.match(folder_name)
-    if M_issue_w_dot:
-        series4file = M_issue_w_dot.group(1)
-        issue = M_issue_w_dot.group(2)
+    m_issue_w_dot = p_issue_w_dot.match(folder_name)
+    if m_issue_w_dot:
+        series4file = m_issue_w_dot.group(1)
+        issue = m_issue_w_dot.group(2)
 
     # ================气泡颜色模式================
     logger.debug(f'{series4file=}')
@@ -11979,6 +13426,9 @@ if __name__ == "__main__":
     else:
         area_dic = {}
 
+    if python_ver in ['3.11.8']:
+        mocr = MangaOcr()
+
     if do_qt:
         appgui = QApplication(sys.argv)
         translator = QTranslator()
@@ -12020,6 +13470,8 @@ if __name__ == "__main__":
         cut_txt = img_folder.parent / f'{img_folder.name}-5断句.txt'
         lettering_txt = img_folder.parent / f'{img_folder.name}-6填字.txt'
         mark_txt = img_folder.parent / f'{img_folder.name}-7标记.txt'
+        lp_txt = img_folder.parent / f'{img_folder.name}-8萌翻.txt'
+        rlp_txt = img_folder.parent / f'{img_folder.name}翻译_0.txt'
         googletrans_txt = img_folder.parent / f'{img_folder.name}-9-api-谷歌翻译.txt'
 
         img_stems = [x.stem for x in img_list]
@@ -12040,7 +13492,7 @@ if __name__ == "__main__":
         ocr_data = iload_data(ocr_yml)
         if '1' in step_str:
             analyze1pic(img_file, frame_data, color_patterns, media_type, auto_subdir)
-        if '2' in step_str:
+        if '2' in step_str or 'L' in step_str:
             appgui = QApplication(sys.argv)
             translator = QTranslator()
             translator.load(str(qm_path))
@@ -12053,10 +13505,13 @@ if __name__ == "__main__":
             else:
                 scaling_factor = 1
             scaling_factor_reci = 1 / scaling_factor
-            order_qt(appgui)
+            if '2' in step_str:
+                order_qt(appgui)
+            else:
+                lp_qt(appgui)
         if '3' in step_str:
             pic_results = ocr1pic(img_file, frame_data, order_data, ocr_data, all_masks, media_type, media_lang, vert)
             ocr_doc = Document()
-            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, img_ind, img_list)
+            ocr_doc, all_cropped_imgs = update_ocr_doc(ocr_doc, pic_results, img_folder, img_ind, img_list, media_type)
             write_docx(pic_ocr_docx, ocr_doc)
             logger.warning(f'{pic_ocr_docx=}')
